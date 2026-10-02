@@ -30,7 +30,7 @@ h1, h2, h3, p { margin-top: 0; }
 .main-wrap { position: relative; min-height: 100dvh; }
 .topbar { height: 84px; max-width: 1120px; margin: auto; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; color: #fffdf5; }
 .app-brand { display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; font-size: 22px; font-weight: 700; letter-spacing: .08em; }
-.app-brand img { width: 36px; height: 36px; object-fit: cover; border: 2px solid #fff; border-radius: 50%; }
+.app-brand img { width: 84px; height: 84px; margin: -18px; object-fit: contain; }
 .content { max-width: 1120px; margin: auto; padding: 22px 28px calc(128px + env(safe-area-inset-bottom)); }
 .bottom-nav { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 5; width: min(calc(100% - 32px), 470px); display: flex; padding: 6px; background: #f8faf5f0; border: 1px solid #fffdf8; border-radius: 13px; box-shadow: 0 12px 28px #27485b45; backdrop-filter: blur(14px); }
 .bottom-nav button { flex: 1; min-height: 53px; border: 0; border-radius: 8px; background: transparent; color: #6d8591; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; transition: background .2s ease, color .2s ease, transform .2s ease; }
