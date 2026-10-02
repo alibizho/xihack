@@ -71,61 +71,13 @@ export function App() {
       <a className="skip-link" href="#main">
         跳到主要内容
       </a>
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">
-            <span />
-          </span>
-          <span>
-            拾序<span className="brand-dot">.</span>
-            <small>把时间留给重要的事</small>
-          </span>
-        </div>
-        <div className="side-caption">工作空间</div>
-        <nav className="side-nav" aria-label="主导航">
-          {pages.map((item) => (
-            <button
-              key={item}
-              className={`nav-item ${page === item ? "active" : ""}`}
-              onClick={() => navigate(item)}
-              aria-current={page === item ? "page" : undefined}
-            >
-              <Icon name={icons[item]} />
-              {labels[item]}
-              <span className="nav-arrow">›</span>
-            </button>
-          ))}
-        </nav>
-        <div className="side-bottom">
-          <div className="demo-tag">
-            <span className="status-dot" />
-            前端演示版本
-          </div>
-          <p>任务保存在当前浏览器。语音与智能解析为预设演示。</p>
-        </div>
-      </aside>
       <div className="main-wrap">
         <header className="topbar">
-          <div className="mobile-brand">
+          <div className="app-brand">
             <span className="brand-mark">
               <span />
             </span>
-            拾序<span className="brand-dot">.</span>
-          </div>
-          <div className="breadcrumb">
-            工作空间 <span>/</span> {labels[page]}
-          </div>
-          <div className="top-right">
-            <span className="top-date">
-              {new Intl.DateTimeFormat("zh-CN", {
-                month: "long",
-                day: "numeric",
-                weekday: "long",
-              }).format(new Date())}
-            </span>
-            <span className="avatar" aria-label="演示用户">
-              序
-            </span>
+            拾序
           </div>
         </header>
         <main id="main" className="content">
