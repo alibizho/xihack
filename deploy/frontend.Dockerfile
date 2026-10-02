@@ -11,6 +11,7 @@ RUN npm run build
 FROM node:24-alpine
 WORKDIR /app
 COPY --from=build /app/server ./server
+COPY --from=build /app/src ./src
 COPY --from=build /app/dist ./dist
 EXPOSE 3000
 CMD ["node", "--experimental-strip-types", "server/index.ts"]
