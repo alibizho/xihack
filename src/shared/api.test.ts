@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { api, post } from "./voiceApi.ts";
+import { ApiRequestError, api, post } from "./api.ts";
 
 test("voice messages use the authenticated same-origin API and CSRF token", async () => {
   const original = globalThis.fetch;
@@ -24,7 +24,7 @@ test("voice messages use the authenticated same-origin API and CSRF token", asyn
 test("expired sessions give a login prompt", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ code: "AUTH_REQUIRED" }), { status: 401 });
-  try { await assert.rejects(() => api("/auth/me"), /请先登录/); }
+  try { await assert.rejects(() => api("/auth/me"), (error: unknown) => error instanceof ApiRequestError && error.code === "AUTH_REQUIRED"); }
   finally { globalThis.fetch = original; }
 });
 

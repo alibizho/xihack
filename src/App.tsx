@@ -6,7 +6,10 @@ import { VoiceAssistant } from "./features/tasks/VoiceAssistant";
 import { TodayPage } from "./features/today/TodayPage";
 import { TasksPage } from "./features/tasks/TasksPage";
 import { TrainingPage } from "./features/training/TrainingPage";
+import { AuthPage } from "./features/profile/AuthPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
+import { currentUser } from "./features/profile/authApi";
+import { ApiRequestError } from "./shared/api.ts";
 
 type Page = "today" | "tasks" | "training" | "profile";
 type Draft = { voice?: boolean; text?: string; edit?: Task };
@@ -20,12 +23,35 @@ function pageFromHash(): Page {
 }
 
 export function App() {
+  const [username, setUsername] = useState<string | null | undefined>();
+  const [connectionError, setConnectionError] = useState("");
+
+  async function checkSession() {
+    setUsername(undefined);
+    setConnectionError("");
+    try { setUsername((await currentUser()).user.username); }
+    catch (reason) {
+      setUsername(null);
+      if (!(reason instanceof ApiRequestError && reason.code === "AUTH_REQUIRED")) setConnectionError((reason as Error).message);
+    }
+  }
+
+  useEffect(() => { void checkSession(); }, []);
+
+  if (username === undefined) return <div className="auth-page"><p role="status">正在检查登录状态…</p></div>;
+  if (username === null) return <AuthPage connectionError={connectionError} onRetry={checkSession} onAuthenticated={(name) => { setConnectionError(""); setUsername(name); }} />;
+  return <Workspace key={username} username={username} onLoggedOut={() => setUsername(null)} />;
+}
+
+function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: () => void }) {
+  const taskStorageKey = `xihack-demo-tasks:${username}`;
+  const historyStorageKey = `xihack-demo-history:${username}`;
   const [page, setPage] = useState<Page>(pageFromHash);
   const [focusDay, setFocusDay] = useState(localDate(new Date()));
   const [taskViewKey, setTaskViewKey] = useState(0);
   const [tasks, setTasks] = useState<Task[]>(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("xihack-demo-tasks") || "null");
+      const saved = JSON.parse(localStorage.getItem(taskStorageKey) || "null");
       return Array.isArray(saved) ? saved.map(normalizeTask) : sampleTasks;
     } catch {
       return sampleTasks;
@@ -34,7 +60,7 @@ export function App() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [history, setHistory] = useState<Capture[]>(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("xihack-demo-history") || "[]");
+      const saved = JSON.parse(localStorage.getItem(historyStorageKey) || "[]");
       return Array.isArray(saved) ? saved : [];
     } catch {
       return [];
@@ -42,11 +68,11 @@ export function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem("xihack-demo-tasks", JSON.stringify(tasks));
-  }, [tasks]);
+    localStorage.setItem(taskStorageKey, JSON.stringify(tasks));
+  }, [tasks, taskStorageKey]);
   useEffect(() => {
-    localStorage.setItem("xihack-demo-history", JSON.stringify(history));
-  }, [history]);
+    localStorage.setItem(historyStorageKey, JSON.stringify(history));
+  }, [history, historyStorageKey]);
   useEffect(() => {
     const onHashChange = () => setPage(pageFromHash());
     window.addEventListener("hashchange", onHashChange);
@@ -90,7 +116,7 @@ export function App() {
           {page === "today" && <TodayPage tasks={tasks} history={history} navigate={navigate} openComposer={(voice, text) => setDraft({ voice, text })} />}
           {page === "tasks" && <TasksPage key={taskViewKey} tasks={tasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => setDraft({ voice })} editTask={(task) => setDraft({ edit: task })} />}
           {page === "training" && <TrainingPage tasks={tasks} navigate={() => navigate("tasks")} />}
-          {page === "profile" && <ProfilePage />}
+          {page === "profile" && <ProfilePage username={username} onLoggedOut={onLoggedOut} />}
         </main>
         <nav className="bottom-nav" aria-label="主导航">
           {pages.map((item) => <button key={item} className={page === item ? "active" : ""} onClick={() => navigate(item)} aria-current={page === item ? "page" : undefined}>
@@ -98,7 +124,7 @@ export function App() {
           </button>)}
         </nav>
       </div>
-      {draft?.voice ? <VoiceAssistant onClose={() => setDraft(null)} /> : draft && <TaskComposer key={draft.edit?.id || draft.text || "text"} initialText={draft.text} edit={draft.edit} tasks={tasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
+      {draft?.voice ? <VoiceAssistant username={username} onClose={() => setDraft(null)} onSessionExpired={onLoggedOut} /> : draft && <TaskComposer key={draft.edit?.id || draft.text || "text"} initialText={draft.text} edit={draft.edit} tasks={tasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
     </div>
   );
 }
