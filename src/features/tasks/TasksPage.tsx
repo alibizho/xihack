@@ -39,7 +39,7 @@ export function TasksPage({ tasks, initialDay, toggle, updateScore, openComposer
   }
 
   return <div className="tasks-page">
-    <header className="tasks-intro"><div><h1>把事情排好顺序</h1><p>{openCount} 件待办 · 按日期与时间查看</p></div><button className="button button-primary" onClick={() => openComposer(true)} aria-label="语音添加"><Icon name="mic" size={18} /> 语音添加</button></header>
+    <header className="tasks-intro"><div><h1>把事情排好顺序</h1><p>{openCount} 件待办 · 按日期与时间查看</p></div><button className="button button-primary" onClick={() => openComposer(true)} aria-label="打开语音助理"><Icon name="mic" size={18} /> 语音询问</button></header>
     <div className="task-workspace">
       <div className="task-add-row"><strong>事务日程</strong><button className="button button-primary" onClick={() => openComposer(false)}><Icon name="plus" size={17} /> 添加事务</button></div>
       {view === "cards" && <div className="date-picker"><div className="date-picker-head"><strong>{new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long" }).format(center)}</strong><div className="date-picker-actions"><button className="week-step" onClick={() => changeWeek(-1)} aria-label="前一周">‹</button><button className="week-step" onClick={() => changeWeek(1)} aria-label="后一周">›</button><button className={selectedDay ? "unscheduled-button" : "unscheduled-button selected"} onClick={() => setSelectedDay("")}>未安排 {matching.filter((task) => !parseDue(task.due).date).length}</button></div></div><div className="date-strip" role="group" aria-label="事务日期">{dates.map((date) => {

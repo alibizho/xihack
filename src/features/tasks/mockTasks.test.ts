@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compareBySchedule, localDate, mockProposal, normalizeTask, parseDue, priorityScore, scheduledDue, tasksOnDate } from "./mockTasks.ts";
-import { transcribeTask } from "./mockTaskApi.ts";
 
 test("demo scoring keeps importance separate from deadline and accepts decimals", () => {
   assert.throws(() => mockProposal("  "));
@@ -12,11 +11,6 @@ test("demo scoring keeps importance separate from deadline and accepts decimals"
   assert.equal(priorityScore({ importance: 7.2, urgency: 3.3 }), 5.6);
   assert.equal(normalizeTask({ id: "old", title: "旧任务", due: "", category: "", done: false, important: true, urgent: false } as never).importance, 7.5);
   assert.equal(normalizeTask({ id: "1", title: "完成项目周报", due: "", category: "", done: false, importance: 7.5, urgency: 7.5, importanceReason: "旧版任务迁移值", urgencyReason: "旧版任务迁移值" } as never).importance, 8.2);
-});
-
-test("mock transcription requires recorded audio", async () => {
-  await assert.rejects(() => transcribeTask(new Blob([])));
-  assert.ok((await transcribeTask(new Blob(["demo"]))).text);
 });
 
 test("date and time pickers place each task on its day in time order", () => {

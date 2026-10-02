@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { localDate, normalizeTask, parseDue, sampleTasks, type Task, type TaskDraft } from "./features/tasks/mockTasks";
 import { Icon, type IconName } from "./shared/Icon";
 import { TaskComposer } from "./features/tasks/TaskComposer";
+import { VoiceAssistant } from "./features/tasks/VoiceAssistant";
 import { TodayPage } from "./features/today/TodayPage";
 import { TasksPage } from "./features/tasks/TasksPage";
 import { TrainingPage } from "./features/training/TrainingPage";
@@ -97,7 +98,7 @@ export function App() {
           </button>)}
         </nav>
       </div>
-      {draft && <TaskComposer key={draft.edit?.id || draft.text || String(draft.voice)} initialText={draft.text} voice={!!draft.voice} edit={draft.edit} tasks={tasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
+      {draft?.voice ? <VoiceAssistant onClose={() => setDraft(null)} /> : draft && <TaskComposer key={draft.edit?.id || draft.text || "text"} initialText={draft.text} edit={draft.edit} tasks={tasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
     </div>
   );
 }

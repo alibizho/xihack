@@ -13,10 +13,13 @@
 .record-button { margin-top: 15px; min-height: 45px; width: 100%; border: 0; background: var(--blue); color: #fff; display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 13px; transition: background .18s ease, transform .18s ease; }
 .record-button:hover { transform: translateY(-1px); }
 .record-button.recording { background: #ac5e67; }
-.voice-examples { display: grid; gap: 6px; margin-top: 18px; }
-.voice-examples span { font-size: 11px; color: #647b84; }
-.voice-examples button { min-height: 44px; border: 1px solid #d5e0dc; background: #fff; text-align: left; padding: 7px 11px; color: var(--blue-dark); font-size: 12px; }
-.voice-examples button:hover { background: #f7f9f5; }
+.voice-auth { display: grid; gap: 10px; }
+.voice-auth label { font-size: 13px; font-weight: 700; }
+.voice-auth input:not([type="checkbox"]) { min-height: 44px; padding: 8px; border: 1px solid #bfccd0; }
+.voice-auth .voice-consent { display: flex; align-items: center; gap: 8px; }
+.voice-auth .button { min-height: 44px; }
+.voice-answer { white-space: pre-wrap; padding: 16px; background: #ecf1ed; color: var(--blue-dark); line-height: 1.6; }
+.voice-logout { display: block; margin: 8px auto 0; padding: 10px; min-height: 44px; border: 0; background: transparent; color: var(--blue-dark); text-decoration: underline; }
 .field-label { display: block; color: #435b67; font-size: 12px; font-weight: 700; margin: 16px 0 8px; }
 .composer textarea, .form-input { display: block; width: 100%; min-height: 46px; padding: 11px 12px; border: 1px solid #cedbd8; background: #fff; color: var(--ink); border-radius: 0; outline: 0; }
 .composer textarea { min-height: 112px; resize: vertical; line-height: 1.6; }

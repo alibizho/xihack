@@ -60,12 +60,6 @@ export const sampleTasks: Task[] = [
   { id: "4", title: "整理书桌和资料", due: "待安排", category: "生活", importance: 3.8, urgency: 2.9, importanceReason: "未说明明确后果", urgencyReason: "没有截止时间", done: false },
 ];
 
-export const voiceExamples = [
-  "明天下午三点交项目周报，很重要",
-  "周五前准备英语展示，不着急但很重要",
-  "记得预约牙医复诊",
-];
-
 export const priorityScore = (task: Pick<Task, "importance" | "urgency">) =>
   Math.round((task.importance * 0.6 + task.urgency * 0.4) * 10) / 10;
 export const quadrant = (task: Pick<Task, "importance" | "urgency">) =>

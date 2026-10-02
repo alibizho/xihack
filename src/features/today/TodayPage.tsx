@@ -23,8 +23,8 @@ export function TodayPage({ tasks, history, navigate, openComposer }: Props) {
   return <div className="today-page">
     <header className="today-intro"><span>{date}</span><h1>{greeting}，<br />今天想先做什么？</h1></header>
     <section className="assistant-panel" aria-labelledby="capture-title">
-      <span className="demo-pill">语音与评分演示</span>
-      <button className="orb-button" onClick={() => openComposer(true)} aria-label="打开语音记录"><span className="voice-orb"><Icon name="mic" size={31} /></span><strong id="capture-title">点按，说出一件事</strong></button>
+      <span className="demo-pill">本地语音 · 事务演示</span>
+      <button className="orb-button" onClick={() => openComposer(true)} aria-label="打开语音助理"><span className="voice-orb"><Icon name="mic" size={31} /></span><strong id="capture-title">点按，问助理一件事</strong></button>
       <form className="quick-capture" onSubmit={(event) => { event.preventDefault(); if (thought.trim()) openComposer(false, thought); }}>
         <label className="sr-only" htmlFor="quick-thought">文字记录</label>
         <input id="quick-thought" value={thought} onChange={(event) => setThought(event.target.value)} placeholder="或者，直接写下来…" />
