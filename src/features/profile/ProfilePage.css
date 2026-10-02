@@ -1,0 +1,21 @@
+.profile-page { max-width: 700px; margin: auto; animation: view-enter .32s ease both; }
+.profile-intro { padding: 31px 3px 25px; }
+.profile-intro .section-kicker { color: #fffdf5; }
+.profile-intro h1 { margin: 12px 0 0; color: #fffdf5; font-size: clamp(31px, 5vw, 44px); }
+.profile-card { padding: 25px; border: 1px solid #e9ece7; border-radius: 14px; background: var(--paper); box-shadow: 0 12px 32px #28495a25; }
+.profile-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid #dce5e8; }
+.profile-card-head span { color: var(--muted); font-size: 12px; }
+.profile-card-head strong { font-size: 18px; overflow-wrap: anywhere; }
+.profile-card form { display: grid; gap: 10px; padding: 22px 0; }
+.profile-card label { font-size: 13px; font-weight: 700; }
+.profile-card input { width: 100%; min-height: 48px; border: 1px solid #bfccd0; border-radius: 8px; background: #fff; color: var(--ink); padding: 0 14px; }
+.profile-card form .button { justify-self: start; margin-top: 5px; border-radius: 8px; }
+.profile-message { margin: 0 0 17px; color: var(--blue-dark); font-size: 12px; }
+.profile-delete { border-top: 1px solid #dce5e8; padding-top: 18px; }
+.profile-delete-trigger { min-height: 44px; border: 0; background: transparent; color: #a44e5e; padding: 0; font-size: 13px; font-weight: 600; }
+.profile-confirm p { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.profile-confirm > div { display: flex; flex-wrap: wrap; gap: 10px; }
+.profile-confirm .button { min-height: 44px; border-radius: 8px; }
+.profile-delete-button { background: #a44e5e; color: #fff; }
+.profile-delete-button:hover { background: #873847; }
+@media (max-width: 700px) { .profile-intro { padding: 18px 2px 22px; } .profile-card { padding: 18px; } }

@@ -5,13 +5,14 @@ import { TaskComposer } from "./features/tasks/TaskComposer";
 import { TodayPage } from "./features/today/TodayPage";
 import { TasksPage } from "./features/tasks/TasksPage";
 import { TrainingPage } from "./features/training/TrainingPage";
+import { ProfilePage } from "./features/profile/ProfilePage";
 
-type Page = "today" | "tasks" | "training";
+type Page = "today" | "tasks" | "training" | "profile";
 type Draft = { voice?: boolean; text?: string; edit?: Task };
 export type Capture = { id: string; input: string; title: string; time: string; edited: boolean };
-const pages: Page[] = ["today", "tasks", "training"];
-const labels: Record<Page, string> = { today: "今天", tasks: "事务", training: "训练" };
-const icons: Record<Page, IconName> = { today: "home", tasks: "list", training: "focus" };
+const pages: Page[] = ["today", "tasks", "training", "profile"];
+const labels: Record<Page, string> = { today: "今天", tasks: "事务", training: "训练", profile: "我的" };
+const icons: Record<Page, IconName> = { today: "home", tasks: "list", training: "focus", profile: "user" };
 function pageFromHash(): Page {
   const value = location.hash.slice(1);
   return pages.includes(value as Page) ? (value as Page) : "today";
@@ -88,6 +89,7 @@ export function App() {
           {page === "today" && <TodayPage tasks={tasks} history={history} navigate={navigate} openComposer={(voice, text) => setDraft({ voice, text })} />}
           {page === "tasks" && <TasksPage key={taskViewKey} tasks={tasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => setDraft({ voice })} editTask={(task) => setDraft({ edit: task })} />}
           {page === "training" && <TrainingPage tasks={tasks} navigate={() => navigate("tasks")} />}
+          {page === "profile" && <ProfilePage />}
         </main>
         <nav className="bottom-nav" aria-label="主导航">
           {pages.map((item) => <button key={item} className={page === item ? "active" : ""} onClick={() => navigate(item)} aria-current={page === item ? "page" : undefined}>

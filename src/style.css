@@ -64,7 +64,7 @@ h1, h2, h3, p { margin-top: 0; }
 .empty-state { padding: 60px 22px; color: var(--muted); text-align: center; }
 @media (min-width: 850px) {
   .topbar { padding-right: 28px; }
-  .bottom-nav { position: absolute; top: 18px; right: 28px; bottom: auto; left: auto; transform: none; width: 330px; box-shadow: none; background: #f8faf5dd; }
+  .bottom-nav { position: absolute; top: 18px; right: 28px; bottom: auto; left: auto; transform: none; width: 420px; box-shadow: none; background: #f8faf5dd; }
   .bottom-nav button { min-height: 44px; }
 }
 @media (max-width: 700px) {
