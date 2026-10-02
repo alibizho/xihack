@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { sampleTasks, type Task } from "./features/tasks/mockTasks";
+import { localDate, normalizeTask, parseDue, sampleTasks, type Task, type TaskDraft } from "./features/tasks/mockTasks";
 import { Icon, type IconName } from "./shared/Icon";
 import { TaskComposer } from "./features/tasks/TaskComposer";
 import { TodayPage } from "./features/today/TodayPage";
@@ -7,17 +7,11 @@ import { TasksPage } from "./features/tasks/TasksPage";
 import { TrainingPage } from "./features/training/TrainingPage";
 
 type Page = "today" | "tasks" | "training";
-const labels: Record<Page, string> = {
-  today: "今日",
-  tasks: "事务",
-  training: "训练",
-};
-const icons: Record<Page, IconName> = {
-  today: "home",
-  tasks: "list",
-  training: "focus",
-};
+type Draft = { voice?: boolean; text?: string; edit?: Task };
+export type Capture = { id: string; input: string; title: string; time: string; edited: boolean };
 const pages: Page[] = ["today", "tasks", "training"];
+const labels: Record<Page, string> = { today: "今天", tasks: "事务", training: "训练" };
+const icons: Record<Page, IconName> = { today: "home", tasks: "list", training: "focus" };
 function pageFromHash(): Page {
   const value = location.hash.slice(1);
   return pages.includes(value as Page) ? (value as Page) : "today";
@@ -25,109 +19,83 @@ function pageFromHash(): Page {
 
 export function App() {
   const [page, setPage] = useState<Page>(pageFromHash);
+  const [focusDay, setFocusDay] = useState(localDate(new Date()));
+  const [taskViewKey, setTaskViewKey] = useState(0);
   const [tasks, setTasks] = useState<Task[]>(() => {
     try {
-      return (
-        JSON.parse(localStorage.getItem("xihack-demo-tasks") || "null") ||
-        sampleTasks
-      );
+      const saved = JSON.parse(localStorage.getItem("xihack-demo-tasks") || "null");
+      return Array.isArray(saved) ? saved.map(normalizeTask) : sampleTasks;
     } catch {
       return sampleTasks;
     }
   });
-  const [composer, setComposer] = useState<null | "voice" | "text">(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [history, setHistory] = useState<Capture[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("xihack-demo-history") || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem("xihack-demo-tasks", JSON.stringify(tasks));
   }, [tasks]);
   useEffect(() => {
+    localStorage.setItem("xihack-demo-history", JSON.stringify(history));
+  }, [history]);
+  useEffect(() => {
     const onHashChange = () => setPage(pageFromHash());
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
-  function navigate(next: Page) {
+  function navigate(next: Page, day?: string) {
+    if (next === "tasks") setFocusDay(day ?? localDate(new Date()));
     location.hash = next;
     setPage(next);
+    window.scrollTo(0, 0);
   }
   function toggle(id: string) {
-    setTasks((current) =>
-      current.map((task) =>
-        task.id === id ? { ...task, done: !task.done } : task,
-      ),
-    );
+    setTasks((current) => current.map((task) => task.id === id ? { ...task, done: !task.done } : task));
   }
-  function save(task: Omit<Task, "id" | "done">) {
-    setTasks((current) => [
-      { ...task, id: crypto.randomUUID(), done: false },
-      ...current,
-    ]);
-    setComposer(null);
-    navigate("tasks");
+  function updateScore(id: string, axis: "importance" | "urgency", value: number) {
+    setTasks((current) => current.map((task) => task.id === id ? { ...task, [axis]: value, [axis === "importance" ? "importanceReason" : "urgencyReason"]: "用户调整" } : task));
   }
-  const openComposer = (voice = false) => setComposer(voice ? "voice" : "text");
+  function save(task: TaskDraft, sourceText: string) {
+    if (draft?.edit) {
+      setTasks((current) => current.map((item) => item.id === draft.edit?.id ? { ...item, ...task } : item));
+    } else {
+      setTasks((current) => [{ ...task, id: crypto.randomUUID(), done: false }, ...current]);
+    }
+    setHistory((current) => [{ id: crypto.randomUUID(), input: sourceText || task.title, title: task.title, time: new Date().toISOString(), edited: !!draft?.edit }, ...current].slice(0, 30));
+    setDraft(null);
+    setTaskViewKey((value) => value + 1);
+    navigate("tasks", parseDue(task.due).date);
+  }
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main">
-        跳到主要内容
-      </a>
+      <a className="skip-link" href="#main">跳到主要内容</a>
       <div className="main-wrap">
         <header className="topbar">
-          <div className="app-brand">
-            <span className="brand-mark">
-              <span />
-            </span>
-            拾序
-          </div>
+          <a className="app-brand" href="#today" onClick={() => setPage("today")} aria-label="易忆，返回首页">
+            <img src="/logo.jpg" alt="" />
+            <span>易忆</span>
+          </a>
         </header>
-        <main id="main" className="content">
-          {page === "today" && (
-            <TodayPage
-              tasks={tasks}
-              toggle={toggle}
-              navigate={navigate}
-              openComposer={openComposer}
-            />
-          )}
-          {page === "tasks" && (
-            <TasksPage
-              tasks={tasks}
-              toggle={toggle}
-              openComposer={openComposer}
-            />
-          )}
-          {page === "training" && <TrainingPage />}
+        <main id="main" className={`content ${page === "training" ? "training-content" : ""}`}>
+          {page === "today" && <TodayPage tasks={tasks} history={history} navigate={navigate} openComposer={(voice, text) => setDraft({ voice, text })} />}
+          {page === "tasks" && <TasksPage key={taskViewKey} tasks={tasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => setDraft({ voice })} editTask={(task) => setDraft({ edit: task })} />}
+          {page === "training" && <TrainingPage tasks={tasks} navigate={() => navigate("tasks")} />}
         </main>
         <nav className="bottom-nav" aria-label="主导航">
-          {pages.map((item) => (
-            <button
-              key={item}
-              className={page === item ? "active" : ""}
-              onClick={() => navigate(item)}
-              aria-current={page === item ? "page" : undefined}
-            >
-              <Icon name={icons[item]} size={21} />
-              <span>{labels[item]}</span>
-            </button>
-          ))}
+          {pages.map((item) => <button key={item} className={page === item ? "active" : ""} onClick={() => navigate(item)} aria-current={page === item ? "page" : undefined}>
+            <Icon name={icons[item]} size={20} /><span>{labels[item]}</span>
+          </button>)}
         </nav>
-        {page === "tasks" && (
-          <button
-            className="mobile-fab"
-            onClick={() => openComposer(true)}
-            aria-label="新建事务"
-          >
-            <Icon name="plus" size={26} />
-          </button>
-        )}
       </div>
-      {composer && (
-        <TaskComposer
-          voice={composer === "voice"}
-          onClose={() => setComposer(null)}
-          onSave={save}
-        />
-      )}
+      {draft && <TaskComposer key={draft.edit?.id || draft.text || String(draft.voice)} initialText={draft.text} voice={!!draft.voice} edit={draft.edit} tasks={tasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
     </div>
   );
 }

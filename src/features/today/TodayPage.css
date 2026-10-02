@@ -1,87 +1,43 @@
-.today-page {
-  max-width: 700px;
-  margin: 0 auto;
-}
-.today-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.today-heading h1 {
-  margin: 0;
-  font-size: 30px;
-  letter-spacing: -1px;
-}
-.today-heading span {
-  color: #69776d;
-  font-size: 13px;
-}
-.voice-section {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  padding: 42px 0 38px;
-  text-align: center;
-}
-.voice-circle {
-  width: 194px;
-  height: 194px;
-  border: 0;
-  border-radius: 50%;
-  background: #1d6257;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 13px;
-  font-size: 17px;
-  font-weight: 700;
-  box-shadow: 0 0 0 12px #e2eee7, 0 0 0 25px #f0f5ed;
-}
-.voice-circle:hover {
-  background: #144c43;
-}
-.voice-section p {
-  margin: 43px 0 3px;
-  color: #6a786e;
-  font-size: 12px;
-}
-.manual-entry,
-.today-tasks-heading button {
-  min-height: 44px;
-  border: 0;
-  background: transparent;
-  color: #1d6257;
-  font-size: 13px;
-  font-weight: 700;
-}
-.manual-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.today-tasks-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.today-tasks-heading h2 {
-  margin: 0;
-  font-size: 19px;
-}
-.today-tasks .task-row {
-  min-height: 76px;
-}
-@media (min-width: 701px) {
-  .voice-section {
-    padding-top: 58px;
-    padding-bottom: 55px;
-  }
-  .voice-circle {
-    width: 220px;
-    height: 220px;
-  }
+.today-page { max-width: 820px; margin: auto; }
+.today-intro { padding: 5px 4px 13px; }
+.today-intro > span { color: #fffdf5; font-size: 12px; letter-spacing: .12em; }
+.today-intro h1 { margin: 8px 0 0; font-size: clamp(29px, 4vw, 39px); line-height: 1.16; letter-spacing: -.04em; font-weight: 600; color: #fffdf5; }
+.assistant-panel { position: relative; min-height: 305px; display: flex; align-items: center; flex-direction: column; justify-content: center; gap: 11px; border: 1px solid #e9ece7; border-radius: 16px; background: var(--paper); box-shadow: 0 16px 40px #28495a2b; padding: 22px; }
+.demo-pill { position: absolute; top: 20px; right: 24px; color: #657987; font-size: 11px; }
+.orb-button { display: flex; align-items: center; flex-direction: column; gap: 10px; border: 0; background: transparent; color: #253747; }
+.orb-button strong { font-size: 18px; font-weight: 600; }
+.voice-orb { width: 128px; height: 128px; border-radius: 50%; display: grid; place-items: center; color: #305168; background: radial-gradient(circle at 60% 65%, #ffffffee 0 20%, transparent 52%), radial-gradient(circle at 70% 27%, #85dce6 0 14%, transparent 44%), radial-gradient(circle at 20% 70%, #b5a8df 0 11%, transparent 43%), conic-gradient(from 130deg, #fafbff, #9bc6e1, #c4c1e3, #baf2e9, #fff); border: 3px solid #ffffffc9; box-shadow: inset -13px -15px 22px #8caec229, inset 9px 8px 18px #fff, 0 14px 32px #819bb545; animation: orb-breathe 4s ease-in-out infinite; transition: transform .2s ease; }
+.orb-button:hover .voice-orb { transform: translateY(-4px) scale(1.03); }
+@keyframes orb-breathe { 50% { box-shadow: inset -13px -15px 22px #8caec229, inset 9px 8px 18px #fff, 0 18px 39px #819bb562; } }
+.voice-orb svg { background: #ffffffb8; border-radius: 50%; padding: 10px; width: 50px; height: 50px; }
+.quick-capture { width: min(100%, 480px); min-height: 50px; display: flex; align-items: center; gap: 8px; border: 1px solid #d4e1e1; border-radius: 40px; background: #fff; box-shadow: 0 5px 20px #9bacb12b; padding: 3px 5px 3px 18px; }
+.quick-capture:focus-within { outline: 2px solid #66879b; }
+.quick-capture input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
+.quick-capture input::placeholder { color: #8c9aa2; }
+.quick-capture button { width: 43px; height: 43px; border: 0; border-radius: 50%; background: var(--blue); color: white; display: grid; place-items: center; }
+.quick-capture button:disabled { background: #d7dfe1; }
+.home-shortcuts { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; margin-top: 12px; }
+.home-shortcuts button { min-height: 118px; position: relative; text-align: left; border: 1px solid #e9ece7; border-radius: 12px; background: var(--paper); padding: 16px; color: var(--ink); box-shadow: 0 8px 25px #28495a20; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; transition: background .2s ease, transform .2s ease, box-shadow .2s ease; }
+.home-shortcuts button:hover { background: #fffef9; transform: translateY(-3px); box-shadow: 0 13px 29px #28495a2d; }
+.home-shortcuts button > svg:last-child { position: absolute; right: 20px; bottom: 20px; color: #6e8591; }
+.home-shortcuts strong { font-size: 17px; max-width: calc(100% - 25px); }
+.home-shortcuts span:not(.shortcut-label) { color: var(--muted); font-size: 12px; }
+.shortcut-label { color: #758792; font-size: 11px; letter-spacing: .08em; }
+.training-shortcut > svg:first-child { color: var(--blue); margin-bottom: 3px; }
+.history-panel { margin-top: 16px; border: 1px solid #e9ece7; border-radius: 12px; background: var(--paper); padding: 0 20px; }
+.history-panel summary { min-height: 54px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 13px; font-weight: 600; }
+.history-panel summary span { color: #778a95; font-size: 11px; font-weight: 400; }
+.history-panel ol { padding: 0; margin: 0 0 15px; list-style: none; }
+.history-panel li { display: grid; gap: 5px; border-top: 1px solid #dce5e8; padding: 12px 0; }
+.history-panel li span, .history-panel li small, .history-panel p { color: #758892; font-size: 11px; }
+.history-panel li strong { font-size: 13px; }
+.history-panel p { padding: 8px 0 15px; }
+@media (max-width: 700px) {
+  .today-intro { padding: 0 2px 12px; }
+  .today-intro h1 { font-size: clamp(29px, 7vw, 33px); }
+  .assistant-panel { min-height: 280px; padding: 20px 17px; border-radius: 12px; }
+  .voice-orb { width: 112px; height: 112px; }
+  .home-shortcuts { gap: 9px; }
+  .home-shortcuts button { min-height: 115px; border-radius: 10px; padding: 13px; }
+  .home-shortcuts strong { font-size: 14px; }
 }
