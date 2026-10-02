@@ -17,7 +17,7 @@
 ## 部署方式
 
 1. 使用 `git clone --recurse-submodules` 获取完整项目。服务器的前端代码放在 `/opt/xihack/frontend`，子模块在 `/opt/xihack/frontend/backend`；从 `/opt/xihack` 运行 `docker compose --env-file .env -f frontend/deploy/compose.yaml`。当前环境使用固定提交，不自动追踪同学 2 的主分支。
-2. 在 `/opt/xihack/.env` 放置随机生成的 `DB_PASSWORD`、`CSRF_SECRET` 与用户提供的 `MIMO_API_KEY`，权限设为 600。该文件不进 Git。PostgreSQL 使用独立 Docker 卷和独立数据库。
+2. 在 `/opt/xihack/.env` 放置随机生成的 `DB_PASSWORD`、`CSRF_SECRET`，以及两把分别用于训练复盘和同学 2 后端的 `MIMO_API_KEY`、`BACKEND_MIMO_API_KEY`，权限设为 600。密钥只在服务器配置，不进 Git；后端与 worker 使用后端专用密钥，Node 训练复盘使用原有密钥。PostgreSQL 使用独立 Docker 卷和独立数据库。
 3. 先启动数据库，再用后端容器运行 `alembic upgrade head`；随后启动 backend、worker、frontend。最后将 `deploy/nginx.conf` 安装为此域名的独立 Nginx 站点并测试、重载。
 4. 联调 HTTPS 页面、账号/CSRF、任务提案确认、对话与 Agent、专注复盘。现有域名证书可复用，但需留意自动续期。后端更新时先在前端仓库运行 `git submodule update --remote backend`，审核变化、提交新的子模块引用，再重建相关服务；不覆盖现有项目。
 
