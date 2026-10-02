@@ -12,6 +12,7 @@ export type IconName =
   | "search"
   | "play"
   | "refresh"
+  | "chevronDown"
   | "user";
 const icons: Record<IconName, ReactNode> = {
   home: (
@@ -57,6 +58,7 @@ const icons: Record<IconName, ReactNode> = {
       <path d="M5.5 9A8 8 0 0 1 19 7l1 1M4 16l1 1a8 8 0 0 0 13.5-2" />
     </>
   ),
+  chevronDown: <path d="m6 9 6 6 6-6" />,
   user: (
     <>
       <circle cx="12" cy="8" r="4" />

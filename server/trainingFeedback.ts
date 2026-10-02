@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { trainingReviewRequest } from "./trainingReviewAgent.ts";
 
 type Env = { MIMO_API_KEY?: string; MIMO_BASE_URL?: string };
 type RoundInput = { difficulty: "beginner" | "normal" | "advanced"; seconds: number; mistakes: number; taps: number[] };
@@ -56,22 +57,6 @@ function validRound(value: unknown): value is RoundInput {
   return Math.abs(previous - round.seconds) < 0.01;
 }
 
-function metrics(round: RoundInput) {
-  const intervals = round.taps.map((time, index) => time - (round.taps[index - 1] || 0));
-  const average = (values: number[]) => Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1));
-  const slowestIndex = intervals.indexOf(Math.max(...intervals));
-  return {
-    difficulty: ({ beginner: "入门", normal: "普通", advanced: "进阶" })[round.difficulty],
-    totalSeconds: Number(round.seconds.toFixed(1)),
-    mistakes: round.mistakes,
-    firstEightAverageSeconds: average(intervals.slice(0, 8)),
-    middleNineAverageSeconds: average(intervals.slice(8, 17)),
-    lastEightAverageSeconds: average(intervals.slice(17)),
-    slowestStep: slowestIndex === 0 ? "寻找 1" : `${slowestIndex} → ${slowestIndex + 1}`,
-    slowestStepSeconds: Number(intervals[slowestIndex].toFixed(1)),
-  };
-}
-
 function validFeedback(value: unknown): value is Feedback {
   if (!value || typeof value !== "object") return false;
   const feedback = value as Partial<Feedback>;
@@ -101,18 +86,7 @@ export async function handleTrainingFeedback(request: IncomingMessage, response:
   } catch { reply(response, 503, { error: "AI 服务地址配置有误" }); return; }
 
   try {
-    const body = JSON.stringify({
-      model: "mimo-v2.6-flash",
-      thinking: { type: "disabled" },
-      response_format: { type: "json_object" },
-      max_completion_tokens: 300,
-      temperature: 0.4,
-      stream: false,
-      messages: [
-        { role: "system", content: "你是专注训练的中文复盘助手。只根据给定的单局客观数据写复盘，不推断注意力水平、健康状况、动机或长期趋势。返回 JSON 对象，恰好包含 observation 和 suggestion 两个字符串。observation 用一两句准确描述本局节奏或误触，suggestion 给出一个温和、具体、可尝试的下一步。每项不超过 60 个汉字，不使用诊断或夸大的评价。" },
-        { role: "user", content: JSON.stringify(metrics(input)) },
-      ],
-    });
+    const body = JSON.stringify(trainingReviewRequest(input));
     const signal = AbortSignal.timeout(60_000);
     let upstream: Response | undefined;
     for (let attempt = 0; attempt < 2; attempt++) {

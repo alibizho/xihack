@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { priorityScore, type Task } from "../tasks/mockTasks";
 import { cellFeedback, shuffledBoard, type Difficulty } from "./trainingGame";
 import { requestTrainingFeedback, type TrainingFeedback } from "./trainingFeedback";
+import { getRoundInsight } from "./trainingInsight";
 import { Icon } from "../../shared/Icon";
 import "./TrainingPage.css";
 
@@ -12,6 +13,23 @@ const modes: { id: Difficulty; name: string; detail: string }[] = [
   { id: "advanced", name: "进阶", detail: "没有提示，点过的格子保持原样" },
 ];
 const formatTime = (seconds: number) => seconds.toFixed(1) + " 秒";
+const pendingReviews = new Set<string>();
+const roundsStorageKey = "xihack-demo-rounds";
+const roundsUpdatedEvent = "xihack-rounds-updated";
+const formatDate = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "历史对局" : new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+};
+
+function RoundFeedback({ round }: { round: Round & { feedback: TrainingFeedback } }) {
+  const insight = getRoundInsight(round);
+  return <div className="round-feedback-content">
+    <strong className="round-feedback-heading">{insight.heading}</strong>
+    <p className="round-feedback-evidence">{insight.evidence}</p>
+    <p className="round-feedback-observation">{round.feedback.observation}</p>
+    <div className="round-feedback-action"><span>下局只试一件事</span><p>{round.feedback.suggestion}</p></div>
+  </div>;
+}
 
 export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () => void }) {
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
@@ -24,18 +42,37 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
   const [taps, setTaps] = useState<number[]>([]);
   const [rounds, setRounds] = useState<Round[]>(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("xihack-demo-rounds") || "[]");
+      const saved = JSON.parse(localStorage.getItem(roundsStorageKey) || "[]");
       return Array.isArray(saved) ? saved : [];
     } catch { return []; }
   });
   const [feedbackState, setFeedbackState] = useState<{ roundId: string; status: "loading" | "error"; message?: string } | null>(null);
   const startAt = useRef(0);
   const completed = useRef(false);
+  const mounted = useRef(false);
   const boardWrap = useRef<HTMLDivElement>(null);
   const resultWrap = useRef<HTMLElement>(null);
   const nextTask = [...tasks].filter((task) => !task.done).sort((a, b) => priorityScore(b) - priorityScore(a))[0];
 
-  useEffect(() => { localStorage.setItem("xihack-demo-rounds", JSON.stringify(rounds)); }, [rounds]);
+  useEffect(() => {
+    const sync = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(roundsStorageKey) || "[]") as Round[];
+        if (Array.isArray(saved)) setRounds((current) => {
+          const storedIds = new Set(saved.map((item) => item.id));
+          return [...current.filter((item) => !storedIds.has(item.id)), ...saved].slice(0, 20);
+        });
+      } catch { /* Keep the current records when storage is unavailable. */ }
+    };
+    window.addEventListener(roundsUpdatedEvent, sync);
+    sync();
+    return () => window.removeEventListener(roundsUpdatedEvent, sync);
+  }, []);
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    try { localStorage.setItem(roundsStorageKey, JSON.stringify(rounds)); }
+    catch { /* Training still works when browser storage is unavailable. */ }
+  }, [rounds]);
   useEffect(() => {
     if (phase !== "countdown") return;
     const timer = window.setTimeout(() => {
@@ -73,18 +110,29 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     setPhase("countdown");
   }
   async function analyze(round: Round) {
+    if (pendingReviews.has(round.id)) return;
+    pendingReviews.add(round.id);
     setFeedbackState({ roundId: round.id, status: "loading" });
     try {
       const feedback = await requestTrainingFeedback(round);
       try {
-        const saved = JSON.parse(localStorage.getItem("xihack-demo-rounds") || "[]") as Round[];
-        if (Array.isArray(saved)) localStorage.setItem("xihack-demo-rounds", JSON.stringify(saved.map((item) => item.id === round.id ? { ...item, feedback } : item)));
+        const saved = JSON.parse(localStorage.getItem(roundsStorageKey) || "[]") as Round[];
+        if (Array.isArray(saved)) {
+          const updated = { ...round, feedback };
+          const next = saved.some((item) => item.id === round.id)
+            ? saved.map((item) => item.id === round.id ? updated : item)
+            : [updated, ...saved].slice(0, 20);
+          localStorage.setItem(roundsStorageKey, JSON.stringify(next));
+        }
       } catch { /* Current result remains visible even if browser storage is unavailable. */ }
       setRounds((current) => current.map((item) => item.id === round.id ? { ...item, feedback } : item));
       setFeedbackState((current) => current?.roundId === round.id ? null : current);
     } catch (error) {
       const message = error instanceof Error && error.name !== "TimeoutError" ? error.message : "AI 响应超时，请稍后重试";
       setFeedbackState((current) => current?.roundId === round.id ? { roundId: round.id, status: "error", message } : current);
+    } finally {
+      pendingReviews.delete(round.id);
+      window.dispatchEvent(new Event(roundsUpdatedEvent));
     }
   }
   function tap(number: number) {
@@ -124,14 +172,26 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
       <h2>{formatTime(last.seconds)}</h2>
       <p>误触 {last.mistakes} 次 · 最慢的一步：{slowest === 1 ? "寻找 1" : `${slowest - 1} → ${slowest}`}</p>
       <div className="training-feedback">
-        <h3>AI 本局复盘</h3>
-        {last.feedback ? <><p>{last.feedback.observation}</p><p className="training-feedback-suggestion">下次试试：{last.feedback.suggestion}</p></>
+        <div className="training-feedback-title"><h3>这一局，哪里值得留意</h3><span>MiMo 复盘</span></div>
+        {last.feedback ? <RoundFeedback round={{ ...last, feedback: last.feedback }} />
           : feedbackState?.roundId === last.id && feedbackState.status === "loading" ? <p role="status">正在根据本局记录生成复盘…可以先浏览其他页面，成绩会保留。</p>
           : <div className="training-feedback-error"><p>{feedbackState?.roundId === last.id ? feedbackState.message : "本局复盘尚未生成"}</p><button type="button" onClick={() => void analyze(last)}>重试生成</button></div>}
-        <small>仅将本局汇总指标发送给 MiMo，不上传任务或音视频。</small>
+        <small>依据本局 25 次点击生成练习建议，不代表注意力测评。仅发送汇总指标，不上传任务或音视频。</small>
       </div>
       {nextTask && <button onClick={navigate}>接下来：{nextTask.title} <Icon name="arrow" size={17} /></button>}
     </section>}
-    {rounds.length > 0 && <details className="round-history"><summary>训练记录 <span>{rounds.length} 局</span></summary><ol>{rounds.map((round) => <li key={round.id}><span>{modes.find((mode) => mode.id === round.difficulty)?.name}</span><strong>{formatTime(round.seconds)}</strong><small>误触 {round.mistakes} 次</small></li>)}</ol></details>}
+    {rounds.length > 0 && <section className="round-history" aria-label="训练记录">
+      <div className="round-history-heading"><h2>训练记录</h2><span>{rounds.length} 局 · {rounds.filter((round) => round.feedback).length} 份复盘</span></div>
+      <ol>{rounds.map((round) => <li key={round.id}>
+        {round.feedback ? <details className="round-history-item">
+          <summary><span className="round-history-date">{formatDate(round.completedAt)}</span><span className="round-history-mode">{modes.find((mode) => mode.id === round.difficulty)?.name}</span><strong>{formatTime(round.seconds)}</strong><span className="round-history-review">查看复盘</span><Icon name="chevronDown" size={18} /></summary>
+          <div className="round-history-detail"><p className="round-history-mistakes">误触 {round.mistakes} 次</p><RoundFeedback round={{ ...round, feedback: round.feedback }} /></div>
+        </details> : <div className="round-history-item round-history-plain">
+          <div className="round-history-summary"><span className="round-history-date">{formatDate(round.completedAt)}</span><span className="round-history-mode">{modes.find((mode) => mode.id === round.difficulty)?.name}</span><strong>{formatTime(round.seconds)}</strong><span className="round-history-mistakes">误触 {round.mistakes} 次</span></div>
+          <button type="button" disabled={feedbackState?.status === "loading" || pendingReviews.has(round.id)} onClick={() => void analyze(round)}>{pendingReviews.has(round.id) ? "生成中…" : "生成复盘"}</button>
+          {feedbackState?.roundId === round.id && feedbackState.status === "error" && <p role="status" className="round-history-error">{feedbackState.message}</p>}
+        </div>}
+      </li>)}</ol>
+    </section>}
   </div>;
 }
