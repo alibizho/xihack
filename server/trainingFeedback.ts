@@ -101,26 +101,36 @@ export async function handleTrainingFeedback(request: IncomingMessage, response:
   } catch { reply(response, 503, { error: "AI 服务地址配置有误" }); return; }
 
   try {
-    const upstream = await fetch(endpoint, {
-      method: "POST",
-      headers: { "api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "mimo-v2.6-flash",
-        thinking: { type: "disabled" },
-        response_format: { type: "json_object" },
-        max_completion_tokens: 300,
-        temperature: 0.4,
-        stream: false,
-        messages: [
-          { role: "system", content: "你是专注训练的中文复盘助手。只根据给定的单局客观数据写复盘，不推断注意力水平、健康状况、动机或长期趋势。返回 JSON 对象，恰好包含 observation 和 suggestion 两个字符串。observation 用一两句准确描述本局节奏或误触，suggestion 给出一个温和、具体、可尝试的下一步。每项不超过 60 个汉字，不使用诊断或夸大的评价。" },
-          { role: "user", content: JSON.stringify(metrics(input)) },
-        ],
-      }),
-      signal: AbortSignal.timeout(12_000),
+    const body = JSON.stringify({
+      model: "mimo-v2.6-flash",
+      thinking: { type: "disabled" },
+      response_format: { type: "json_object" },
+      max_completion_tokens: 300,
+      temperature: 0.4,
+      stream: false,
+      messages: [
+        { role: "system", content: "你是专注训练的中文复盘助手。只根据给定的单局客观数据写复盘，不推断注意力水平、健康状况、动机或长期趋势。返回 JSON 对象，恰好包含 observation 和 suggestion 两个字符串。observation 用一两句准确描述本局节奏或误触，suggestion 给出一个温和、具体、可尝试的下一步。每项不超过 60 个汉字，不使用诊断或夸大的评价。" },
+        { role: "user", content: JSON.stringify(metrics(input)) },
+      ],
     });
+    const signal = AbortSignal.timeout(60_000);
+    let upstream: Response | undefined;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      upstream = await fetch(endpoint, {
+        method: "POST",
+        headers: { "api-key": key, "Content-Type": "application/json" },
+        body,
+        signal,
+      });
+      if ((upstream.status !== 429 && upstream.status !== 503) || attempt === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    if (!upstream) throw new Error("no_response");
     if (!upstream.ok) {
       console.error("MiMo training feedback failed:", upstream.status);
-      reply(response, 502, { error: "AI 暂时无法生成复盘，本局成绩已保存" });
+      reply(response, upstream.status === 429 || upstream.status === 503 ? 503 : 502, {
+        error: upstream.status === 429 || upstream.status === 503 ? "AI 当前较忙，本局成绩已保存，请稍后重试" : "AI 暂时无法生成复盘，本局成绩已保存",
+      });
       return;
     }
     const result = await upstream.json() as { choices?: { message?: { content?: string } }[] };
@@ -130,6 +140,9 @@ export async function handleTrainingFeedback(request: IncomingMessage, response:
     reply(response, 200, { observation: parsed.observation.trim(), suggestion: parsed.suggestion.trim() });
   } catch (error) {
     console.error("MiMo training feedback error:", error instanceof Error ? error.message : "unknown");
-    reply(response, 502, { error: "AI 暂时无法生成复盘，本局成绩已保存" });
+    const timeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    reply(response, timeout ? 504 : 502, {
+      error: timeout ? "AI 响应超时，本局成绩已保存，请稍后重试" : "AI 暂时无法生成复盘，本局成绩已保存",
+    });
   }
 }

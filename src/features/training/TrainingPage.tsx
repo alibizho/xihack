@@ -126,7 +126,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
       <div className="training-feedback">
         <h3>AI 本局复盘</h3>
         {last.feedback ? <><p>{last.feedback.observation}</p><p className="training-feedback-suggestion">下次试试：{last.feedback.suggestion}</p></>
-          : feedbackState?.roundId === last.id && feedbackState.status === "loading" ? <p role="status">正在根据本局记录生成复盘…</p>
+          : feedbackState?.roundId === last.id && feedbackState.status === "loading" ? <p role="status">正在根据本局记录生成复盘…可以先浏览其他页面，成绩会保留。</p>
           : <div className="training-feedback-error"><p>{feedbackState?.roundId === last.id ? feedbackState.message : "本局复盘尚未生成"}</p><button type="button" onClick={() => void analyze(last)}>重试生成</button></div>}
         <small>仅将本局汇总指标发送给 MiMo，不上传任务或音视频。</small>
       </div>

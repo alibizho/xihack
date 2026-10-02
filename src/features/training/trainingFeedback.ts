@@ -8,7 +8,7 @@ export async function requestTrainingFeedback(round: FeedbackRound): Promise<Tra
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ difficulty: round.difficulty, seconds: round.seconds, mistakes: round.mistakes, taps: round.taps }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(65_000),
   });
   const data: unknown = await response.json();
   if (!response.ok) {
