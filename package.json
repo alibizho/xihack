@@ -6,7 +6,8 @@
     "dev": "vite --host localhost --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/features/tasks/mockTasks.test.ts src/features/training/trainingGame.test.ts src/features/profile/mockProfileApi.test.ts"
+    "start": "node --env-file-if-exists=.env.local --experimental-strip-types server/index.ts",
+    "test": "node --experimental-strip-types --test src/features/tasks/mockTasks.test.ts src/features/training/trainingGame.test.ts src/features/profile/mockProfileApi.test.ts server/trainingFeedback.test.ts"
   },
   "dependencies": {
     "@jspsych/extension-webgazer": "^1.2.0",
@@ -17,6 +18,7 @@
     "react-dom": "19.2.6"
   },
   "devDependencies": {
+    "@types/node": "^24.19.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",

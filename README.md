@@ -13,6 +13,8 @@ npm run dev
 
 Open the local URL printed by Vite. To test from a phone on the same network, run `npm run dev -- --host 0.0.0.0`; microphone and camera features will require HTTPS when they are implemented.
 
+For AI feedback after every completed 5×5 round, copy `.env.example` to `.env.local` and put your pay-as-you-go Xiaomi MiMo `sk-` key in `MIMO_API_KEY`. Keep `.env.local` on your computer; Git ignores it. The browser never receives the key. Without a key, the game and its ordinary result still work, and the AI area explains that the service is not configured. See [training AI setup and Alibaba Cloud deployment](docs/training-ai.md).
+
 ```bash
 npm run build
 npm test
@@ -23,7 +25,7 @@ npm test
 - **Today:** sample priorities, completion, and a prominent voice entry.
 - **Tasks:** list and four-quadrant views, search, and a review step before adding a task. Tasks are saved in this browser with `localStorage`.
 - **Voice / AI:** labelled mock transcription examples and mock field extraction. No audio is recorded or sent.
-- **Training:** a page entry and visual placeholder. The 5×5 Schulte implementation belongs to the training contributor.
+- **Training:** a three-level 5×5 Schulte game with local records and a per-round MiMo feedback request. AI feedback requires the server key and a reachable API.
 
 The target behavior is described in [PRD v1.0](docs/PRD_v1.0.pdf), with the narrower hackathon scope in [frontend plan](docs/frontend-plan.md). This scaffold is a demo, not a completed PRD implementation.
 

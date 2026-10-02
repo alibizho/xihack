@@ -13,5 +13,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["src/**/*.tsx", "src/features/tasks/mockTasks.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "server/**/*.ts", "vite.config.ts"]
 }

@@ -1,0 +1,37 @@
+# 专注训练 AI 复盘与部署
+
+完成 5×5 训练后，页面立即显示用时、误触和最慢一步，并自动请求 `/api/training-feedback`。服务端验证这一局的 25 个点击时间，计算前、中、后三段平均间隔及最慢一步，再把这些汇总指标发给 `mimo-v2.6-flash`。模型只撰写「本局观察」和「下次试试」，不计算成绩、不判断健康或长期专注力。AI 请求失败时成绩照常保存，可在结果页重试。
+
+## 本地配置
+
+1. 复制 `.env.example` 为 `.env.local`。
+2. 在 `.env.local` 填入 `MIMO_API_KEY=sk-...`。这是服务端变量，**不要**改成 `VITE_MIMO_API_KEY`，不要提交 `.env.local`，也不要把密钥发在聊天里。
+3. 运行 `npm ci`、`npm run dev`，打开 Vite 打印的本地地址。
+
+默认接口地址为 `https://api.xiaomimimo.com/v1`；按量付费 `sk-` 密钥使用此地址。修改地址时可在 `.env.local` 设置 `MIMO_BASE_URL`。服务端每个 IP 每分钟最多接受 8 次复盘请求，单次上传最多 4 KB，调用模型的等待上限为 12 秒。上线前还应在小米控制台设置用量或预算上限。
+
+## 接口
+
+`POST /api/training-feedback` 接收：
+
+```json
+{"difficulty":"normal","seconds":42.1,"mistakes":2,"taps":[1.2,2.4]}
+```
+
+`taps` 实际须包含从 1 到 25 的 25 个累计秒数；上例只展示字段形状。成功时返回：
+
+```json
+{"observation":"本局后段的点击间隔略长，误触 2 次。","suggestion":"下次试试放慢一点，优先保持准确点击。"}
+```
+
+训练记录仍保存在浏览器的 `localStorage` 中。服务端不存储训练记录，也不向模型发送任务、摄像头或音频数据。
+
+## 阿里云服务器
+
+目标机器安装 Node.js 24 或更新版本，运行 `npm ci` 和 `npm run build`。构建后以 `npm start` 启动同一个 Node 服务：它在 `127.0.0.1:${PORT:-3000}` 提供静态页面和训练 API。服务器上应把 `MIMO_API_KEY` 设置为仅服务进程可读的环境变量；不要把真实密钥放进仓库、前端构建变量或公开的 Web 目录。服务进程可由 systemd 管理，公网入口由 Nginx 反向代理到 `127.0.0.1:3000`。
+
+有域名后，在 Nginx 上为域名配置 HTTPS，再把 HTTP 跳转到 HTTPS。当前没有域名时可以先通过服务器 IP 验证页面和训练复盘；浏览器的摄像头、麦克风等后续能力需要安全来源，正式演示应完成 HTTPS 配置。
+
+部署前需要服务器公网 IP、SSH 用户名和端口、登录方式，以及部署目录的决定。收到这些信息和密钥已在服务器配置完成的确认后，再执行远端部署与真实模型验证。
+
+MiMo 接口和参数依据[小米官方 Chat Completions 文档](https://mimo.mi.com/docs/en-US/api/chat/openai-api)。

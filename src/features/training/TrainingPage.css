@@ -30,6 +30,13 @@
 .training-result h2 { margin: 10px 0 3px; font-size: 31px; }
 .training-result p { color: #687f89; font-size: 13px; }
 .training-result button { min-height: 44px; border: 0; background: transparent; color: var(--blue-dark); display: flex; align-items: center; gap: 9px; padding: 0; text-align: left; font-size: 13px; font-weight: 700; }
+.training-feedback { margin: 20px 0 12px; padding: 18px 0 10px; border-top: 1px solid #dbe5e7; }
+.training-feedback h3 { margin: 0 0 10px; color: var(--blue-dark); font-size: 16px; }
+.training-feedback p { margin: 0 0 8px; line-height: 1.65; overflow-wrap: anywhere; }
+.training-feedback .training-feedback-suggestion { color: #365d6b; }
+.training-feedback small { display: block; margin-top: 11px; color: #687f89; font-size: 11px; line-height: 1.5; }
+.training-feedback-error button { min-height: 32px; text-decoration: underline; text-underline-offset: 3px; }
+.training-feedback-error button:focus-visible { outline: 2px solid var(--blue-dark); outline-offset: 3px; border-radius: 2px; }
 .round-history { margin-top: 16px; border: 1px solid #e9ece7; border-radius: 11px; background: var(--paper); padding: 0 19px; }
 .round-history summary { min-height: 52px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; cursor: pointer; }
 .round-history summary span { color: #758995; font-size: 11px; }
