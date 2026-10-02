@@ -1,0 +1,8 @@
+.git
+.gitmodules
+backend
+node_modules
+dist
+.vite
+*.tsbuildinfo
+.env*
