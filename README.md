@@ -1,4 +1,4 @@
-# 拾序 · XiHack frontend
+# 拾序 · XiHack
 
 Mobile-first React, TypeScript, and Vite web app for voice-first task capture and attention training. The interface is in Simplified Chinese.
 
@@ -7,11 +7,15 @@ Mobile-first React, TypeScript, and Vite web app for voice-first task capture an
 Requires Node.js 22 or newer.
 
 ```bash
+git clone --recurse-submodules https://github.com/alibizho/xihack.git
+cd xihack
 npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite. To test from a phone on the same network, run `npm run dev -- --host 0.0.0.0`; microphone and camera features will require HTTPS when they are implemented.
+The backend lives in the `backend/` Git submodule. See its README for local database setup, then set `BACKEND_URL` in `.env.local` when using account features. The browser-only task demo runs without the backend. If you already cloned the repository, run `git submodule update --init --recursive`.
+
+Open the local URL printed by Vite. To test from a phone on the same network, run `npm run dev -- --host 0.0.0.0`; microphone and camera access require a secure context outside localhost.
 
 For AI feedback after every completed 5×5 round, copy `.env.example` to `.env.local` and put your pay-as-you-go Xiaomi MiMo `sk-` key in `MIMO_API_KEY`. Keep `.env.local` on your computer; Git ignores it. The browser never receives the key. Without a key, the game and its ordinary result still work, and the AI area explains that the service is not configured. See [training AI setup and Alibaba Cloud deployment](docs/training-ai.md).
 
@@ -20,14 +24,14 @@ npm run build
 npm test
 ```
 
-## What this initial demo does
+## Current features
 
-- **Today:** sample priorities, completion, and a prominent voice entry.
-- **Tasks:** list and four-quadrant views, search, and a review step before adding a task. Tasks are saved in this browser with `localStorage`.
-- **Voice / AI:** labelled mock transcription examples and mock field extraction. No audio is recorded or sent.
-- **Training:** a three-level 5×5 Schulte game with local records and a per-round MiMo feedback request. AI feedback requires the server key and a reachable API.
+- **Today and tasks:** browser demo data remains local; signed-in users can fetch account tasks and confirm backend task proposals. Importance and urgency use yes/no in account mode.
+- **Voice:** browser speech recognition produces text; signed-in users can send that text for backend intent and time calibration. Raw audio is not uploaded by this flow.
+- **Training:** a three-level 5×5 Schulte game with local records and saved per-round MiMo feedback. Reviews can be reopened from training history.
+- **Account and assistant:** registration, sign-in, conversations, and Agent runs are connected to the backend. Task-related Agent tool calls currently fail with MiMo's incomplete streamed tool arguments; see [the handoff note](docs/backend-agent-handoff.md).
 
-The target behavior is described in [PRD v1.0](docs/PRD_v1.0.pdf), with the narrower hackathon scope in [frontend plan](docs/frontend-plan.md). This scaffold is a demo, not a completed PRD implementation.
+The target behavior is described in [PRD v1.0](docs/PRD_v1.0.pdf), with the narrower hackathon scope in [frontend plan](docs/frontend-plan.md). Integration and deployment details are in [the integration guide](docs/shixu-integration.md).
 
 ## Project layout
 
@@ -38,9 +42,13 @@ The target behavior is described in [PRD v1.0](docs/PRD_v1.0.pdf), with the narr
 | `src/features/tasks/` | Task UI and mock task behavior |
 | `src/features/training/` | Training contributor's page and styles |
 | `src/shared/` | Reusable UI primitives only |
+| `backend/` | Teammate 2's independent backend repository, pinned as a Git submodule |
+| `server/`, `deploy/` | Node API gateway, training review endpoint, and Alibaba Cloud deployment |
 | `docs/` | Product scope and plans |
 
 Each feature imports its own CSS. Keep feature state and styles in its folder; put code in `src/shared/` only when two features actually use it. The training contributor can replace `TrainingPage.tsx` and `TrainingPage.css` without touching the task flow.
+
+Backend changes should be made in its own repository. To take a new backend release, update the `backend/` submodule commit, review it, and commit the pointer in this repository before deployment.
 
 ## Contributing
 
