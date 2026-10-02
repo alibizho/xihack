@@ -3,7 +3,7 @@
 ## 仓库与服务边界
 
 - 前端仓库：`alibizho/xihack`。Node 24 服务提供构建后的页面和 `/api/training-feedback`；训练记录仍仅存在用户浏览器。
-- 同学 2 后端仓库：`yassay1/shixu-backend`。FastAPI 提供账号、任务提案、对话、只读 Agent；PostgreSQL 保存账号和业务数据，另有 Agent worker。
+- 同学 2 后端仓库：`yassay1/shixu-backend`，作为前端仓库的 `backend/` Git 子模块固定引用具体提交。FastAPI 提供账号、任务提案、对话、Agent 与语音文字校准；PostgreSQL 保存账号和业务数据，另有 Agent worker。
 - 上线时浏览器只访问 `https://jianwenjiuzhou.cloud`。Node 服务把除训练复盘外的 `/api/*` 请求转给同一个 Docker 网络中的 FastAPI，保留 Cookie、Origin、CSRF 头及 SSE 响应流。Python 在宿主机仅开放 `127.0.0.1:8811`，Node 仅开放 `127.0.0.1:8810`，Nginx 负责公网 HTTPS，避开已有项目使用的 8000 和 8787 端口。
 
 开发时，在前端 `.env.local` 增加 `BACKEND_URL=http://127.0.0.1:8000`。Vite 的 `/api/*` 代理同样排除训练复盘。后端 `APP_ORIGIN` 必须与浏览器实际打开的 Vite 地址完全一致；生产环境则使用正式 HTTPS origin。
@@ -16,9 +16,9 @@
 
 ## 部署方式
 
-1. 前端和同学 2 的后端代码分别放在 `/opt/xihack/frontend` 与 `/opt/xihack/backend`；`deploy/compose.yaml` 在 `/opt/xihack/frontend/deploy`，从 `/opt/xihack` 运行 `docker compose -f frontend/deploy/compose.yaml`。
+1. 使用 `git clone --recurse-submodules` 获取完整项目。服务器的前端代码放在 `/opt/xihack/frontend`，子模块在 `/opt/xihack/frontend/backend`；从 `/opt/xihack` 运行 `docker compose --env-file .env -f frontend/deploy/compose.yaml`。当前环境使用固定提交，不自动追踪同学 2 的主分支。
 2. 在 `/opt/xihack/.env` 放置随机生成的 `DB_PASSWORD`、`CSRF_SECRET` 与用户提供的 `MIMO_API_KEY`，权限设为 600。该文件不进 Git。PostgreSQL 使用独立 Docker 卷和独立数据库。
 3. 先启动数据库，再用后端容器运行 `alembic upgrade head`；随后启动 backend、worker、frontend。最后将 `deploy/nginx.conf` 安装为此域名的独立 Nginx 站点并测试、重载。
-4. 联调 HTTPS 页面、账号/CSRF、任务提案确认、对话与 Agent、专注复盘。现有域名证书可复用，但需留意自动续期。更新代码时分别同步两个仓库并重建相应服务，不覆盖现有项目。
+4. 联调 HTTPS 页面、账号/CSRF、任务提案确认、对话与 Agent、专注复盘。现有域名证书可复用，但需留意自动续期。后端更新时先在前端仓库运行 `git submodule update --remote backend`，审核变化、提交新的子模块引用，再重建相关服务；不覆盖现有项目。
 
 部署状态以实际运行记录为准。
