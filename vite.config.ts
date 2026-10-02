@@ -4,6 +4,7 @@ import { handleTrainingFeedback } from "./server/trainingFeedback.ts";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "MIMO_");
+  const backendEnv = loadEnv(mode, process.cwd(), "BACKEND_");
   return {
     plugins: [react(), {
       name: "training-feedback-local-api",
@@ -13,6 +14,7 @@ export default defineConfig(({ mode }) => {
         });
       },
     }],
+    server: { proxy: { "^/api/(?!training-feedback(?:$|[/?]))": { target: backendEnv.BACKEND_URL || "http://127.0.0.1:8000", changeOrigin: true } } },
     cacheDir: ".vite",
   };
 });

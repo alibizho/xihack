@@ -16,7 +16,7 @@ function reply(response: ServerResponse, status: number, body: object) {
 }
 
 function clientAddress(request: IncomingMessage): string {
-  const localProxy = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress || "");
+  const localProxy = process.env.TRUST_PROXY === "true" || ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress || "");
   const forwarded = localProxy ? request.headers["x-real-ip"] : undefined;
   return (typeof forwarded === "string" && forwarded) || request.socket.remoteAddress || "unknown";
 }

@@ -13,6 +13,7 @@ export type IconName =
   | "play"
   | "refresh"
   | "chevronDown"
+  | "chat"
   | "user";
 const icons: Record<IconName, ReactNode> = {
   home: (
@@ -59,6 +60,7 @@ const icons: Record<IconName, ReactNode> = {
     </>
   ),
   chevronDown: <path d="m6 9 6 6 6-6" />,
+  chat: <><path d="M4 4h16v12H8l-4 4V4Z" /><path d="M8 9h8M8 12h5" /></>,
   user: (
     <>
       <circle cx="12" cy="8" r="4" />

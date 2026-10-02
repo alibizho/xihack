@@ -3,9 +3,11 @@ import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleTrainingFeedback } from "./trainingFeedback.ts";
+import { proxyBackend } from "./backendProxy.ts";
 
 const root = resolve(fileURLToPath(new URL("../dist/", import.meta.url)));
 const port = Number(process.env.PORT || 3000);
+const host = process.env.HOST || "127.0.0.1";
 const types: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -23,6 +25,10 @@ createServer(async (request, response) => {
     await handleTrainingFeedback(request, response);
     return;
   }
+  if (pathname.startsWith("/api/")) {
+    proxyBackend(request, response);
+    return;
+  }
   if (request.method !== "GET" && request.method !== "HEAD") { response.writeHead(405).end(); return; }
 
   const file = resolve(root, `.${pathname === "/" ? "/index.html" : pathname}`);
@@ -34,4 +40,4 @@ createServer(async (request, response) => {
   } catch {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Not found");
   }
-}).listen(port, "127.0.0.1", () => console.log(`XiHack server listening at http://127.0.0.1:${port}`));
+}).listen(port, host, () => console.log(`XiHack server listening at http://${host}:${port}`));

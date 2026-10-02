@@ -19,3 +19,10 @@
 .profile-delete-button { background: #a44e5e; color: #fff; }
 .profile-delete-button:hover { background: #873847; }
 @media (max-width: 700px) { .profile-intro { padding: 18px 2px 22px; } .profile-card { padding: 18px; } }
+.account-note, .account-panel p { color: var(--muted); line-height: 1.7; font-size: 13px; margin: 18px 0 0; }
+.account-panel { display: grid; justify-items: start; gap: 18px; }
+.account-tabs { display: flex; gap: 8px; margin-top: 23px; border-bottom: 1px solid #dce5e8; }
+.account-tabs button { min-height: 44px; padding: 0 17px; color: var(--muted); background: transparent; border: 0; border-bottom: 2px solid transparent; }
+.account-tabs button.active { color: var(--blue-dark); border-bottom-color: var(--blue); font-weight: 700; }
+.profile-card .adult-check { display: flex; align-items: center; gap: 10px; font-weight: 400; }
+.profile-card .adult-check input { width: 18px; min-height: 18px; accent-color: var(--blue); }

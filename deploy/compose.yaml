@@ -1,0 +1,68 @@
+x-backend-environment: &backend-environment
+  APP_ENV: production
+  APP_ORIGIN: https://jianwenjiuzhou.cloud
+  SESSION_COOKIE_NAME: __Host-shixu_session
+  DATABASE_URL: postgresql+psycopg://shixu:${DB_PASSWORD}@db:5432/shixu
+  CSRF_SECRET: ${CSRF_SECRET}
+  MIMO_API_KEY: ${MIMO_API_KEY}
+  MIMO_BASE_URL: https://api.xiaomimimo.com/v1
+  MIMO_MODEL: mimo-v2.6-flash
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shixu
+      POSTGRES_USER: shixu
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shixu -d shixu"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: ../frontend/deploy/backend.Dockerfile
+    restart: unless-stopped
+    environment: *backend-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8811:8000"
+
+  worker:
+    build:
+      context: ../../backend
+      dockerfile: ../frontend/deploy/backend.Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "assistant_backend.worker"]
+    environment: *backend-environment
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      TRUST_PROXY: "true"
+      BACKEND_URL: http://backend:8000
+      MIMO_API_KEY: ${MIMO_API_KEY}
+      MIMO_BASE_URL: https://api.xiaomimimo.com/v1
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8810:3000"
+
+volumes:
+  db-data:
