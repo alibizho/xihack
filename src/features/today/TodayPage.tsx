@@ -30,7 +30,7 @@ export function TodayPage({ tasks, history, navigate, openComposer, voiceOpen, o
   return <div className="today-page">
     <header className="today-intro"><span>{date}</span><h1>{greeting}，<br />今天想先做什么？</h1></header>
     <section className={`assistant-panel ${voiceOpen ? "voice-active" : ""}`} aria-labelledby="capture-title">
-      <span className="demo-pill">本地语音识别 · 账号事务</span>
+      <span className="demo-pill">语音助理 · 账号事务</span>
       <VoiceAssistant expanded={voiceOpen} onOpen={openVoice} onClose={closeVoice} onSessionExpired={onSessionExpired} onTasksChanged={onTasksChanged} onTaskCompleted={onTaskCompleted} />
       {!voiceOpen && <form className="quick-capture" onSubmit={(event) => { event.preventDefault(); if (thought.trim()) openComposer(thought); }}>
         <label className="sr-only" htmlFor="quick-thought">文字记录</label>
