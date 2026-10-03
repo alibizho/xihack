@@ -38,7 +38,7 @@ function speechRecognition(): RecognitionClass | undefined {
   return browser.SpeechRecognition || browser.webkitSpeechRecognition;
 }
 
-export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
+export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
   const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const recognition = useRef<Recognition | null>(null);
@@ -75,7 +75,11 @@ export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, on
     const fromButton = openedFromButton.current;
     openedFromButton.current = false;
     const session = fromButton ? sessionId.current : ++sessionId.current;
-    if (!fromButton) void record(session, browserServiceEnabled.current);
+    if (initialText) {
+      inputRef.current = initialText;
+      setInput(initialText);
+      void send();
+    } else if (!fromButton) void record(session, browserServiceEnabled.current);
     const stop = () => { if (document.hidden) { keepListening.current = false; sendOnEnd.current = false; recognition.current?.stop(); } };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     document.addEventListener("visibilitychange", stop);
@@ -304,7 +308,7 @@ export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, on
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
     <label className="field-label" htmlFor="voice-language">识别语言</label>
     <select id="voice-language" className="form-input" value={language} disabled={keepListening.current || preparing || busy} onChange={(event) => setLanguage(event.target.value)}><option value="zh-CN">中文</option><option value="en-US">English</option></select>
-    <label className="field-label" htmlFor="voice-input">识别到的文字（可修改）</label>
+    <label className="field-label" htmlFor="voice-input">对话内容（可修改）</label>
     <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { calibrationId.current++; setCalibrating(false); inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder="说出或输入你想问的事" />
     {clarification && <p className="voice-chat-note" role="status">{clarification}</p>}
     {error && <p className="field-error" role="alert">{error}</p>}

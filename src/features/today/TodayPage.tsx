@@ -10,16 +10,17 @@ type Props = {
   tasks: Task[];
   history: Capture[];
   navigate: (page: "tasks" | "training", day?: string) => void;
-  openComposer: (text: string) => void;
   voiceOpen: boolean;
+  voiceText: string;
   openVoice: () => void;
+  openTextChat: (text: string) => void;
   closeVoice: () => void;
   onSessionExpired: () => void;
   onTasksChanged: () => void;
   onTaskCompleted: (taskId: string) => void;
 };
 
-export function TodayPage({ tasks, history, navigate, openComposer, voiceOpen, openVoice, closeVoice, onSessionExpired, onTasksChanged, onTaskCompleted }: Props) {
+export function TodayPage({ tasks, history, navigate, voiceOpen, voiceText, openVoice, openTextChat, closeVoice, onSessionExpired, onTasksChanged, onTaskCompleted }: Props) {
   const [thought, setThought] = useState("");
   const open = tasks.filter((task) => !task.done);
   const next = [...open].sort(compareBySchedule)[0];
@@ -31,11 +32,11 @@ export function TodayPage({ tasks, history, navigate, openComposer, voiceOpen, o
     <header className="today-intro"><span>{date}</span><h1>{greeting}，<br />今天想先做什么？</h1></header>
     <section className={`assistant-panel ${voiceOpen ? "voice-active" : ""}`} aria-labelledby="capture-title">
       <span className="demo-pill">语音助理 · 账号事务</span>
-      <VoiceAssistant expanded={voiceOpen} onOpen={openVoice} onClose={closeVoice} onSessionExpired={onSessionExpired} onTasksChanged={onTasksChanged} onTaskCompleted={onTaskCompleted} />
-      {!voiceOpen && <form className="quick-capture" onSubmit={(event) => { event.preventDefault(); if (thought.trim()) openComposer(thought); }}>
-        <label className="sr-only" htmlFor="quick-thought">文字记录</label>
-        <input id="quick-thought" value={thought} onChange={(event) => setThought(event.target.value)} placeholder="或者，直接写下来…" />
-        <button type="submit" disabled={!thought.trim()} aria-label="整理文字"><Icon name="arrow" size={19} /></button>
+      <VoiceAssistant expanded={voiceOpen} initialText={voiceText} onOpen={openVoice} onClose={closeVoice} onSessionExpired={onSessionExpired} onTasksChanged={onTasksChanged} onTaskCompleted={onTaskCompleted} />
+      {!voiceOpen && <form className="quick-capture" onSubmit={(event) => { event.preventDefault(); if (thought.trim()) { openTextChat(thought.trim()); setThought(""); } }}>
+        <label className="sr-only" htmlFor="quick-thought">发送文字给助理</label>
+        <input id="quick-thought" maxLength={8000} value={thought} onChange={(event) => setThought(event.target.value)} placeholder="或者，直接告诉助理…" />
+        <button type="submit" disabled={!thought.trim()} aria-label="发送给助理"><Icon name="arrow" size={19} /></button>
       </form>}
     </section>
     <div className="home-shortcuts">

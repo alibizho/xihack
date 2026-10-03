@@ -57,6 +57,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
   const [reportTask, setReportTask] = useState<{ id: string; title: string } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceText, setVoiceText] = useState("");
   const [history] = useState<Capture[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(historyStorageKey) || "[]");
@@ -87,7 +88,8 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
     setPage(next);
     window.scrollTo(0, 0);
   }
-  function openVoice() { navigate("today"); setVoiceOpen(true); }
+  function openVoice() { setVoiceText(""); navigate("today"); setVoiceOpen(true); }
+  function openTextChat(text: string) { setVoiceText(text); navigate("today"); setVoiceOpen(true); }
   function toggle(id: string) {
     const task = serverTasks.find((item) => item.task_id === id);
     if (!task || task.status === "completed") return;
@@ -119,7 +121,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
         </header>
         <main id="main" className={`content ${page === "training" ? "training-content" : ""}`}>
           {taskError && <p className="field-error" role="alert">{taskError}</p>}
-          {page === "today" && <TodayPage tasks={visibleTasks} history={history} navigate={navigate} openComposer={(text) => setDraft({ text })} voiceOpen={voiceOpen} openVoice={openVoice} closeVoice={() => setVoiceOpen(false)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} onTaskCompleted={openReport} />}
+          {page === "today" && <TodayPage tasks={visibleTasks} history={history} navigate={navigate} voiceOpen={voiceOpen} voiceText={voiceText} openVoice={openVoice} openTextChat={openTextChat} closeVoice={() => setVoiceOpen(false)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} onTaskCompleted={openReport} />}
           {page === "tasks" && <TasksPage key={taskViewKey} serverMode tasks={visibleTasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => voice ? openVoice() : setDraft({})} editTask={(task) => setDraft({ edit: task })} openReport={(task) => openReport(task.id)} />}
           {page === "training" && <TrainingPage tasks={visibleTasks} navigate={() => navigate("tasks")} />}
           {page === "profile" && <ProfilePage username={username} onLoggedOut={onLoggedOut} />}
