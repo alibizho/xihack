@@ -1,17 +1,34 @@
+export type CapturedAudio = {
+  samples: Float32Array;
+  sampleRate: 16_000;
+  wav: Blob;
+};
+
 export type AudioCapture = {
-  stop: () => Promise<Blob>;
+  stop: () => Promise<CapturedAudio>;
   cancel: () => Promise<void>;
 };
 
 const OUTPUT_RATE = 16_000;
 
-function encodeWav(chunks: Float32Array[], inputRate: number): Blob {
+function resample(chunks: Float32Array[], inputRate: number): Float32Array {
   const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
   if (length < inputRate / 10) throw new Error("录音太短，请再试一次");
   const input = new Float32Array(length);
   let offset = 0;
   for (const chunk of chunks) { input.set(chunk, offset); offset += chunk.length; }
   const count = Math.floor(length * OUTPUT_RATE / inputRate);
+  const samples = new Float32Array(count);
+  for (let index = 0; index < count; index++) {
+    const position = index * inputRate / OUTPUT_RATE;
+    const before = Math.floor(position);
+    samples[index] = input[before] + ((input[Math.min(before + 1, length - 1)] - input[before]) * (position - before));
+  }
+  return samples;
+}
+
+function encodeWav(samples: Float32Array): Blob {
+  const count = samples.length;
   const buffer = new ArrayBuffer(44 + count * 2);
   const view = new DataView(buffer);
   const label = (at: number, value: string) => { for (let index = 0; index < value.length; index++) view.setUint8(at + index, value.charCodeAt(index)); };
@@ -21,10 +38,7 @@ function encodeWav(chunks: Float32Array[], inputRate: number): Blob {
   view.setUint32(28, OUTPUT_RATE * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
   label(36, "data"); view.setUint32(40, count * 2, true);
   for (let index = 0; index < count; index++) {
-    const position = index * inputRate / OUTPUT_RATE;
-    const before = Math.floor(position);
-    const sample = input[before] + ((input[Math.min(before + 1, length - 1)] - input[before]) * (position - before));
-    view.setInt16(44 + index * 2, Math.round(Math.max(-1, Math.min(1, sample)) * 32767), true);
+    view.setInt16(44 + index * 2, Math.round(Math.max(-1, Math.min(1, samples[index])) * 32767), true);
   }
   return new Blob([buffer], { type: "audio/wav" });
 }
@@ -55,7 +69,11 @@ export async function startAudioCapture(): Promise<AudioCapture> {
       await context?.close();
     };
     return {
-      stop: async () => { await cleanup(); return encodeWav(chunks, context!.sampleRate); },
+      stop: async () => {
+        await cleanup();
+        const samples = resample(chunks, context!.sampleRate);
+        return { samples, sampleRate: OUTPUT_RATE, wav: encodeWav(samples) };
+      },
       cancel: cleanup,
     };
   } catch (error) {

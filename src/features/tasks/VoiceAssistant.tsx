@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
-import { cancelProposal, confirmProposal, createConversation, csrf, getRun, getRunProposals, sendMessage, transcribeAudio, withLocalContext, type Due, type Proposal } from "./agentApi";
-import { startAudioCapture, type AudioCapture } from "./audioCapture";
+import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposals, sendMessage, withLocalContext, type Due, type Proposal } from "./agentApi";
+import { startAudioCapture, type AudioCapture, type CapturedAudio } from "./audioCapture";
+import { browserAsrIsReady, prepareBrowserAsr, subscribeBrowserAsr, transcribeBrowser, type BrowserAsrStatus } from "./speech/browserAsr";
 import "./TaskComposer.css";
 
 type Message = { role: "user" | "assistant"; text: string };
@@ -21,6 +22,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
   const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const capture = useRef<AudioCapture | null>(null);
+  const lastAudio = useRef<{ wav: Blob; prefix: string } | null>(null);
   const recordingTimer = useRef<number | null>(null);
   const active = useRef(true);
   const sessionId = useRef(0);
@@ -38,6 +40,14 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [listening, setListening] = useState(false);
+  const [asrStatus, setAsrStatus] = useState<BrowserAsrStatus>({ state: "uninitialized" });
+  const [usingFallback, setUsingFallback] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = subscribeBrowserAsr(setAsrStatus);
+    void prepareBrowserAsr().catch(() => undefined);
+    return () => { unsubscribe(); };
+  }, []);
 
   useEffect(() => {
     if (!expanded) return;
@@ -114,9 +124,25 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     setPreparing(true);
     try {
       const audio = await current.stop();
-      const draft = await transcribeAudio(audio, await csrf());
+      const prefix = inputRef.current.trim();
+      lastAudio.current = { wav: audio.wav, prefix };
+      let transcript = "";
+      let useServer = !browserAsrIsReady();
+      if (!useServer) {
+        try {
+          transcript = await transcribeBrowser(audio.samples);
+          useServer = isUncertainTranscript(transcript, audio);
+        } catch { useServer = true; }
+      }
+      let draft;
+      if (useServer) {
+        setUsingFallback(true);
+        draft = await enhanceTranscription(audio.wav, await csrf());
+      } else {
+        draft = await calibrate(transcript, await csrf());
+      }
       if (!active.current || session !== sessionId.current) return;
-      const text = `${inputRef.current.trim()} ${draft.draft_text}`.trim();
+      const text = `${prefix} ${draft.draft_text}`.trim();
       inputRef.current = text;
       setInput(text);
       setClarification(draft.needs_clarification ? draft.clarification || "请检查识别结果" : "");
@@ -124,7 +150,34 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       if (!active.current || session !== sessionId.current) return;
       if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
       else setError((reason as Error).message || "转写失败，请重试或使用文字输入");
-    } finally { if (active.current && session === sessionId.current) setPreparing(false); }
+    } finally { if (active.current && session === sessionId.current) { setPreparing(false); setUsingFallback(false); } }
+  }
+
+  function isUncertainTranscript(text: string, audio: CapturedAudio) {
+    const normalized = text.replace(/[\s\p{P}\p{S}]/gu, "");
+    const seconds = audio.samples.length / audio.sampleRate;
+    return !normalized || (seconds > 2 && normalized.length < 2) || /(.)\1{5,}/u.test(normalized);
+  }
+
+  async function retryEnhancedTranscription() {
+    const saved = lastAudio.current;
+    const session = sessionId.current;
+    if (!saved || preparing || busy) return;
+    setPreparing(true);
+    setUsingFallback(true);
+    setError("");
+    try {
+      const draft = await enhanceTranscription(saved.wav, await csrf());
+      if (!active.current || session !== sessionId.current) return;
+      const text = `${saved.prefix} ${draft.draft_text}`.trim();
+      inputRef.current = text;
+      setInput(text);
+      setClarification(draft.needs_clarification ? draft.clarification || "请检查识别结果" : "");
+    } catch (reason) {
+      if (!active.current || session !== sessionId.current) return;
+      if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
+      else setError((reason as Error).message || "增强识别失败，请重试");
+    } finally { if (active.current && session === sessionId.current) { setPreparing(false); setUsingFallback(false); } }
   }
 
   async function send() {
@@ -151,6 +204,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       }
       setInput("");
       inputRef.current = "";
+      lastAudio.current = null;
       setClarification("");
       for (let attempt = 0; attempt < 120 && active.current && session === sessionId.current; attempt++) {
         const run = await getRun(run_id);
@@ -200,10 +254,12 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     {expanded && <button className="voice-close" type="button" onClick={close} aria-label="收起语音助理"><Icon name="close" size={18} /></button>}
     <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening ? "结束录音并转写" : "开始录音" : "打开语音助理并开始录音"}>
       <span className={`voice-orb ${expanded ? "voice-orb-active" : ""} ${preparing || listening ? "voice-orb-listening" : ""}`}><Icon name="mic" size={31} /></span>
-      <strong id="capture-title">{expanded ? preparing ? "正在处理录音…" : listening ? "正在录音 · 点按结束" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
+      <strong id="capture-title">{expanded ? listening ? "正在录音 · 点按结束" : preparing ? usingFallback ? "正在使用增强识别…" : "正在本地识别…" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
-    <p className="voice-chat-note">录音优先由服务器本地模型转写，失败时调用 MiMo。最多录制 18 秒；请检查文字后手动发送。</p>
+    {asrStatus.state === "loading" && !preparing && <p className="voice-chat-note" role="status">{asrStatus.progress ? `正在准备本地语音识别… ${asrStatus.progress}%` : "正在准备本地语音识别…"}</p>}
+    {asrStatus.state === "unsupported" && !preparing && <p className="voice-chat-note" role="status">此浏览器将使用服务器增强识别。</p>}
+    {!preparing && lastAudio.current && input && <button className="voice-chat-note voice-enhance" type="button" onClick={() => void retryEnhancedTranscription()}>识别不准确？使用增强识别</button>}
     {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
       {proposals.map((proposal, index) => {

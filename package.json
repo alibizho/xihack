@@ -10,6 +10,7 @@
     "test": "node --experimental-strip-types --test src/features/tasks/mockTasks.test.ts src/features/tasks/agentApi.test.ts src/shared/api.test.ts src/features/profile/authApi.test.ts src/features/training/trainingGame.test.ts server/trainingFeedback.test.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.0",
     "@jspsych/extension-webgazer": "^1.2.0",
     "@jspsych/plugin-html-button-response": "^2.1.0",
     "@jspsych/plugin-webgazer-calibrate": "^2.1.0",

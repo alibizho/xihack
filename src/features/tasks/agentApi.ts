@@ -11,7 +11,7 @@ export type Proposal = {
   status: "pending" | "confirmed" | "cancelled" | "invalidated"; expires_at: string;
 };
 export type Run = { status: "queued" | "running" | "completed" | "failed" | "cancelled"; assistant_content: string | null; error_code: string | null };
-export type SpeechDraft = { draft_text: string; needs_clarification: boolean; clarification: string | null };
+export type SpeechDraft = { draft_text: string; needs_clarification: boolean; clarification: string | null; fallback_suggested?: boolean };
 export type TaskReport = {
   report_id: string; task_id: string; body: string; summary: string | null; blocker: string | null;
   next_step: string | null; status: "pending" | "analyzed" | "unavailable"; created_at: string;
@@ -35,7 +35,7 @@ export async function listTasks(): Promise<ServerTask[]> {
 }
 
 export const calibrate = async (text: string, token: string) => post<SpeechDraft>("/transcriptions", { text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, token);
-export const transcribeAudio = (audio: Blob, token: string) => {
+export const enhanceTranscription = (audio: Blob, token: string) => {
   const query = new URLSearchParams({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, reason: "user_retry" });
   return api<SpeechDraft>(`/transcriptions/audio?${query}`, {
     method: "POST",
@@ -43,6 +43,7 @@ export const transcribeAudio = (audio: Blob, token: string) => {
     body: audio,
   });
 };
+export const transcribeAudio = enhanceTranscription;
 export const createConversation = (token: string, requestId: string) => post<{ conversation_id: string }>("/conversations", { client_request_id: requestId, title: "新对话" }, token);
 // ponytail: keep local time in the saved message until runs have separate context metadata.
 export function withLocalContext(text: string): string {
