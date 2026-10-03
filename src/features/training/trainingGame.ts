@@ -1,4 +1,5 @@
 export type Difficulty = "beginner" | "normal" | "advanced";
+const colors = ["mint", "peach", "lilac", "yellow", "blue"] as const;
 
 export function shuffledBoard(random = Math.random): number[] {
   const board = Array.from({ length: 25 }, (_, index) => index + 1);
@@ -7,6 +8,10 @@ export function shuffledBoard(random = Math.random): number[] {
     [board[index], board[next]] = [board[next], board[index]];
   }
   return board;
+}
+
+export function shuffledColors(random = Math.random): string[] {
+  return shuffledBoard(random).map((number) => colors[(number - 1) % colors.length]);
 }
 
 export function cellFeedback(difficulty: Difficulty, number: number, target: number): "next" | "done" | "idle" {

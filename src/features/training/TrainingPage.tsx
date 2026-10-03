@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { priorityScore, type Task } from "../tasks/mockTasks";
-import { cellFeedback, shuffledBoard, type Difficulty } from "./trainingGame";
+import { cellFeedback, shuffledBoard, shuffledColors, type Difficulty } from "./trainingGame";
 import { circularSegments } from "./circularBoard";
 import { Icon } from "../../shared/Icon";
 import { fill, t, uiLocale } from "../../shared/i18n.ts";
@@ -42,6 +42,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const [phase, setPhase] = useState<"idle" | "countdown" | "playing" | "finished" | "interrupted">("idle");
   const [board, setBoard] = useState<number[]>(() => shuffledBoard());
+  const [gridColors, setGridColors] = useState<string[]>(() => shuffledColors());
   const [countdown, setCountdown] = useState(3);
   const [target, setTarget] = useState(1);
   const [mistakes, setMistakes] = useState(0);
@@ -109,6 +110,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
   function start() {
     completed.current = false;
     setBoard(shuffledBoard());
+    setGridColors(shuffledColors());
     setTarget(1);
     setMistakes(0);
     setTaps([]);
@@ -169,7 +171,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     <section className="training-surface" aria-label={variant === "circle" ? t("circleBoardAria") : t("boardAria")}>
       <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? fill("nextNumber", { n: target }) : phase === "playing" ? fill("doneCount", { n: target - 1 }) : modes.find((mode) => mode.id === difficulty)?.name()}</span><strong>{formatTime(elapsed)}</strong></div>
       {phase !== "idle" && <div className="board-wrap" ref={boardWrap}>
-        {variant === "grid" ? <div className={`training-board ${phase === "countdown" ? "is-hidden" : ""}`}>{board.map((number) => <button key={number} className={`training-cell ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} onClick={() => tap(number)} disabled={phase !== "playing"} aria-label={fill("numberAria", { n: number })}>{number}</button>)}</div>
+        {variant === "grid" ? <div className={`training-board ${phase === "countdown" ? "is-hidden" : ""}`}>{board.map((number, index) => <button key={number} className={`training-cell ${gridColors[index]} ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} onClick={() => tap(number)} disabled={phase !== "playing"} aria-label={fill("numberAria", { n: number })}>{number}</button>)}</div>
           : <svg className={`circular-board ${phase === "countdown" ? "is-hidden" : ""}`} viewBox="0 0 500 500" role="group" aria-label={t("circleBoardAria")}>
             {circular.map(({ number, color, path, x, y }) => <g key={number} className={`circular-segment ${color} ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} role="button" tabIndex={phase === "playing" ? 0 : -1} aria-label={fill("numberAria", { n: number })} aria-disabled={phase !== "playing"} onClick={() => tap(number)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); tap(number); } }}><path d={path} /><text x={x} y={y} dominantBaseline="central" textAnchor="middle">{String(number).padStart(2, "0")}</text></g>)}
             <g aria-hidden="true"><circle className="circular-hub" cx="250" cy="250" r="34" /><path className="circular-crosshair" d="M 250 231 V 269 M 231 250 H 269" /><circle className="circular-dot" cx="250" cy="250" r="5" /></g>

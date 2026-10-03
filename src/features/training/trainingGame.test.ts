@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cellFeedback, shuffledBoard } from "./trainingGame.ts";
+import { cellFeedback, shuffledBoard, shuffledColors } from "./trainingGame.ts";
 import { circularSegments } from "./circularBoard.ts";
 
 test("board has 1–25 once and difficulty feedback follows the rules", () => {
@@ -11,6 +11,14 @@ test("board has 1–25 once and difficulty feedback follows the rules", () => {
   assert.equal(cellFeedback("normal", 4, 4), "idle");
   assert.equal(cellFeedback("normal", 3, 4), "done");
   assert.equal(cellFeedback("advanced", 3, 4), "idle");
+});
+
+test("grid colors are shuffled with five cells per pastel color", () => {
+  const colors = shuffledColors(() => 0.37);
+  assert.equal(colors.length, 25);
+  assert.deepEqual([...new Set(colors)].sort(), ["blue", "lilac", "mint", "peach", "yellow"]);
+  for (const color of new Set(colors)) assert.equal(colors.filter((item) => item === color).length, 5);
+  assert.notDeepEqual(colors, shuffledColors(() => 0.73));
 });
 
 test("circular board gives every number one finite segment", () => {
