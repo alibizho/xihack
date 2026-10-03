@@ -6,11 +6,13 @@ export function TaskRow({
   toggle,
   edit,
   serverMode = false,
+  openReport,
 }: {
   task: Task;
   toggle: (id: string) => void;
   edit?: () => void;
   serverMode?: boolean;
+  openReport?: () => void;
 }) {
   return (
     <div className={`task-row ${task.done ? "is-done" : ""}`}>
@@ -31,6 +33,7 @@ export function TaskRow({
         </div>
       </div>
       <span className="task-priority">{priorityScore(task).toFixed(1)}</span>
+      {openReport && <button className="task-edit" onClick={openReport} aria-label={`查看${task.title}的完成报告`}><Icon name="arrow" size={18} /></button>}
       {edit && <button className="task-edit" onClick={edit} aria-label={`编辑${task.title}`}><Icon name="arrow" size={18} /></button>}
     </div>
   );

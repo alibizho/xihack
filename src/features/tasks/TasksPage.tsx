@@ -19,9 +19,10 @@ type Props = {
   updateScore: (id: string, axis: "importance" | "urgency", value: number) => void;
   openComposer: (voice?: boolean) => void;
   editTask: (task: Task) => void;
+  openReport: (task: Task) => void;
 };
 
-export function TasksPage({ serverMode = false, tasks, initialDay, toggle, updateScore, openComposer, editTask }: Props) {
+export function TasksPage({ serverMode = false, tasks, initialDay, toggle, updateScore, openComposer, editTask, openReport }: Props) {
   const [view, setView] = useState<"cards" | "matrix">("cards");
   const [showDone, setShowDone] = useState(false);
   const [selectedDay, setSelectedDay] = useState(initialDay ?? localDate(new Date()));
@@ -58,9 +59,9 @@ export function TasksPage({ serverMode = false, tasks, initialDay, toggle, updat
             <div className="priority-card-top"><span className="card-count">{String(index + 1).padStart(2, "0")} / {String(ordered.length).padStart(2, "0")}</span><span className="priority-total">排序分 <strong>{priorityScore(task).toFixed(1)}</strong></span></div>
             <h2>{task.title}</h2><p className="card-due">{formatDue(task.due)} · {task.category}</p>
             {(["importance", "urgency"] as const).map((axis) => serverMode ? <div className={`score-control ${axis}`} key={axis}><div className="score-heading"><span>{axis === "importance" ? "重要" : "紧急"}</span><strong>{task[axis] >= 6 ? "是" : "否"}</strong></div></div> : <div className={`score-control ${axis}`} key={axis}><div className="score-heading"><label htmlFor={`${axis}-${task.id}`}>{axis === "importance" ? "重要度" : "紧急度"}</label><output>{task[axis].toFixed(1)} <small>/ 10</small></output></div><input id={`${axis}-${task.id}`} type="range" min="0" max="10" step="0.1" value={task[axis]} onChange={(event) => updateScore(task.id, axis, Number(event.target.value))} style={{ background: `linear-gradient(to right, ${axis === "importance" ? "#426b82" : "#bd687d"} ${task[axis] * 10}%, #dce4e4 ${task[axis] * 10}%)` }} /><p>{task[axis === "importance" ? "importanceReason" : "urgencyReason"]}</p></div>)}
-            <div className="card-actions">{!(serverMode && task.done) && <button className="button button-outline" onClick={() => editTask(task)}>编辑详情</button>}{!(serverMode && task.done) && <button className="button button-primary" onClick={() => toggle(task.id)}><Icon name="check" size={18} /> {task.done ? "恢复待办" : "标记完成"}</button>}</div>
+            <div className="card-actions">{serverMode && task.done ? <button className="button button-outline" onClick={() => openReport(task)}>查看完成报告</button> : <><button className="button button-outline" onClick={() => editTask(task)}>编辑详情</button><button className="button button-primary" onClick={() => toggle(task.id)}><Icon name="check" size={18} /> {task.done ? "恢复待办" : "标记完成"}</button></>}</div>
           </article></div>)}
         </div> : <div className="empty-state">{selectedDay ? "这一天还没有事务，换个日期或添加一件事。" : "还没有未安排的事务。"}</div>}
-      </section> : <div className="matrix-workspace"><p className="matrix-note">全部{showDone ? "已完成" : "待办"}事务 · {serverMode ? "按重要 / 紧急分类" : "重要度与紧急度以 6.0 为分界"}</p><div className="matrix" aria-label="重要度与紧急度四象限">{quadrants.map((section) => <section className={`quadrant q-${section.id}`} key={section.id}><div className="quadrant-heading"><div><h2>{section.title}</h2><span>{section.action}</span></div><strong>{matching.filter((task) => quadrant(task) === section.id).length}</strong></div><div className="quadrant-body">{matching.filter((task) => quadrant(task) === section.id).sort((a, b) => priorityScore(b) - priorityScore(a)).map((task) => <TaskRow key={task.id} task={task} toggle={toggle} edit={serverMode && task.done ? undefined : () => editTask(task)} serverMode={serverMode} />)}</div></section>)}</div></div>}
+      </section> : <div className="matrix-workspace"><p className="matrix-note">全部{showDone ? "已完成" : "待办"}事务 · {serverMode ? "按重要 / 紧急分类" : "重要度与紧急度以 6.0 为分界"}</p><div className="matrix" aria-label="重要度与紧急度四象限">{quadrants.map((section) => <section className={`quadrant q-${section.id}`} key={section.id}><div className="quadrant-heading"><div><h2>{section.title}</h2><span>{section.action}</span></div><strong>{matching.filter((task) => quadrant(task) === section.id).length}</strong></div><div className="quadrant-body">{matching.filter((task) => quadrant(task) === section.id).sort((a, b) => priorityScore(b) - priorityScore(a)).map((task) => <TaskRow key={task.id} task={task} toggle={toggle} edit={serverMode && task.done ? undefined : () => editTask(task)} serverMode={serverMode} openReport={serverMode && task.done ? () => openReport(task) : undefined} />)}</div></section>)}</div></div>}
   </div>;
 }

@@ -25,6 +25,11 @@
 .voice-proposal div { display: flex; gap: 8px; }
 .voice-proposal button { flex: 1; min-height: 44px; border: 1px solid var(--blue); color: var(--blue); background: transparent; }
 .voice-proposal button:last-child { color: white; background: var(--blue); }
+.report-dialog { width: min(calc(100% - 28px), 560px); }
+.report-body { padding: 14px; background: #edf3ef; white-space: pre-wrap; line-height: 1.6; }
+.report-insight { display: grid; gap: 5px; margin: 18px 0; }
+.report-insight dt { color: var(--blue-dark); font-weight: 700; font-size: 13px; }
+.report-insight dd { margin: 0 0 10px; line-height: 1.6; }
 .field-label { display: block; color: #435b67; font-size: 12px; font-weight: 700; margin: 16px 0 8px; }
 .composer textarea, .form-input { display: block; width: 100%; min-height: 46px; padding: 11px 12px; border: 1px solid #cedbd8; background: #fff; color: var(--ink); border-radius: 0; outline: 0; }
 .composer textarea { min-height: 112px; resize: vertical; line-height: 1.6; }

@@ -13,6 +13,7 @@ import { ApiRequestError } from "./shared/api.ts";
 import { csrf, listTasks, proposeComplete, proposeCreate, proposeUpdate, type Proposal, type ServerTask } from "./features/tasks/agentApi";
 import { displayTask, taskInput } from "./features/tasks/serverTasks";
 import { TaskProposalDialog } from "./features/tasks/TaskProposalDialog";
+import { TaskReportDialog } from "./features/tasks/TaskReportDialog";
 
 type Page = "today" | "tasks" | "training" | "profile";
 type Draft = { voice?: boolean; text?: string; edit?: Task };
@@ -54,6 +55,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
   const [serverTasks, setServerTasks] = useState<ServerTask[]>([]);
   const [taskError, setTaskError] = useState("");
   const [pendingProposal, setPendingProposal] = useState<Proposal | null>(null);
+  const [reportTask, setReportTask] = useState<{ id: string; title: string } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [history] = useState<Capture[]>(() => {
     try {
@@ -65,6 +67,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
   });
 
   const visibleTasks = serverTasks.map(displayTask);
+  const openReport = (id: string) => setReportTask({ id, title: serverTasks.find((task) => task.task_id === id)?.title || "已完成事务" });
   async function refreshTasks() {
     try { setServerTasks(await listTasks()); setTaskError(""); setTaskViewKey((value) => value + 1); }
     catch (reason) { setTaskError((reason as Error).message); }
@@ -115,7 +118,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
         <main id="main" className={`content ${page === "training" ? "training-content" : ""}`}>
           {taskError && <p className="field-error" role="alert">{taskError}</p>}
           {page === "today" && <TodayPage tasks={visibleTasks} history={history} navigate={navigate} openComposer={(voice, text) => setDraft({ voice, text })} />}
-          {page === "tasks" && <TasksPage key={taskViewKey} serverMode tasks={visibleTasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => setDraft({ voice })} editTask={(task) => setDraft({ edit: task })} />}
+          {page === "tasks" && <TasksPage key={taskViewKey} serverMode tasks={visibleTasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => setDraft({ voice })} editTask={(task) => setDraft({ edit: task })} openReport={(task) => openReport(task.id)} />}
           {page === "training" && <TrainingPage tasks={visibleTasks} navigate={() => navigate("tasks")} />}
           {page === "profile" && <ProfilePage username={username} onLoggedOut={onLoggedOut} />}
         </main>
@@ -125,8 +128,9 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
           </button>)}
         </nav>
       </div>
-      {draft?.voice ? <VoiceAssistant username={username} onClose={() => setDraft(null)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} /> : draft && <TaskComposer key={draft.edit?.id || draft.text || "text"} initialText={draft.text} edit={draft.edit} tasks={visibleTasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
-      {pendingProposal && <TaskProposalDialog proposal={pendingProposal} onClose={() => setPendingProposal(null)} onConfirmed={() => void refreshTasks()} />}
+      {draft?.voice ? <VoiceAssistant username={username} onClose={() => setDraft(null)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} onTaskCompleted={openReport} /> : draft && <TaskComposer key={draft.edit?.id || draft.text || "text"} initialText={draft.text} edit={draft.edit} tasks={visibleTasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
+      {pendingProposal && <TaskProposalDialog proposal={pendingProposal} taskTitle={serverTasks.find((task) => task.task_id === pendingProposal.task_id)?.title} onClose={() => setPendingProposal(null)} onConfirmed={() => void refreshTasks()} onCompleted={(id, title) => setReportTask({ id, title })} />}
+      {reportTask && <TaskReportDialog taskId={reportTask.id} title={reportTask.title} onClose={() => setReportTask(null)} />}
     </div>
   );
 }

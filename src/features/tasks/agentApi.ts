@@ -12,6 +12,10 @@ export type Proposal = {
 };
 export type Run = { status: "queued" | "running" | "completed" | "failed" | "cancelled"; assistant_content: string | null; error_code: string | null };
 export type SpeechDraft = { draft_text: string; needs_clarification: boolean; clarification: string | null };
+export type TaskReport = {
+  report_id: string; task_id: string; body: string; summary: string | null; blocker: string | null;
+  next_step: string | null; status: "pending" | "analyzed" | "unavailable"; created_at: string;
+};
 
 export async function csrf() {
   return (await api<{ csrf_token: string }>("/auth/csrf")).csrf_token;
@@ -46,3 +50,5 @@ export const proposeCreate = (task: object, token: string) => post<Proposal>("/p
 export const proposeUpdate = (task: ServerTask, changes: object, token: string) => post<Proposal>("/proposals", {
   client_request_id: crypto.randomUUID(), operation: "update", task_id: task.task_id, expected_version: task.version, changes,
 }, token);
+export const getTaskReport = (taskId: string) => api<TaskReport>(`/tasks/${encodeURIComponent(taskId)}/report`);
+export const submitTaskReport = (taskId: string, body: string, token: string) => post<TaskReport>(`/tasks/${encodeURIComponent(taskId)}/report`, { body }, token);

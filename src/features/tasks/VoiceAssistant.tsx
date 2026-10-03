@@ -28,7 +28,7 @@ function localRecognition(): RecognitionClass | undefined {
   return recognition?.available && recognition.install ? recognition : undefined;
 }
 
-export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksChanged }: { username: string; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void }) {
+export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { username: string; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const recognition = useRef<Recognition | null>(null);
@@ -199,6 +199,7 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
         if (!key) { key = crypto.randomUUID(); confirmKeys.current.set(proposal.proposal_id, key); }
         await confirmProposal(proposal.proposal_id, key, token);
         onTasksChanged();
+        if (proposal.operation === "complete" && proposal.task_id) onTaskCompleted(proposal.task_id);
       } else await cancelProposal(proposal.proposal_id, token);
       setProposals((current) => current.map((item) => item.proposal_id === proposal.proposal_id ? { ...item, status: accept ? "confirmed" : "cancelled" } : item));
     } catch (reason) { setError((reason as Error).message); }
