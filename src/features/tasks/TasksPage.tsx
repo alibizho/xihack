@@ -3,6 +3,7 @@ import { formatDue, localDate, parseDue, priorityScore, quadrant, tasksOnDate, t
 import { Icon } from "../../shared/Icon";
 import { fill, getLang, t, uiLocale } from "../../shared/i18n.ts";
 import { TaskRow } from "./TaskRow";
+import { EventTreeView } from "./EventTreeView";
 import "./TasksPage.css";
 
 const quadrants = [
@@ -25,7 +26,7 @@ type Props = {
 };
 
 export function TasksPage({ serverMode = false, tasks, initialDay, toggle, updateScore, openComposer, editTask, openReport }: Props) {
-  const [view, setView] = useState<"cards" | "matrix">("cards");
+  const [view, setView] = useState<"cards" | "matrix" | "tree">("cards");
   const [showDone, setShowDone] = useState(false);
   const [selectedDay, setSelectedDay] = useState(initialDay ?? localDate(new Date()));
   const matching = tasks.filter((task) => task.done === showDone);
@@ -53,7 +54,7 @@ export function TasksPage({ serverMode = false, tasks, initialDay, toggle, updat
         const selected = selectedDay === key;
         return <button key={key} className={selected ? "selected" : ""} aria-current={selected ? "date" : undefined} aria-label={fill("weekdayTaskAria", { date: `${date.getMonth() + 1}/${date.getDate()}`, weekday: weekdays[date.getDay()], n: count })} onClick={() => setSelectedDay(key)}><strong>{date.getDate()}</strong><span>{weekdays[date.getDay()]}</span>{count > 0 && <i aria-hidden="true" />}</button>;
       })}</div></div>}
-      <div className="task-toolbar"><div className="task-tabs" role="group" aria-label={t("statusAria")}><button className={!showDone ? "selected" : ""} aria-pressed={!showDone} onClick={() => setShowDone(false)}>{t("todoTab")} {openCount}</button><button className={showDone ? "selected" : ""} aria-pressed={showDone} onClick={() => setShowDone(true)}>{t("doneTab")} {tasks.length - openCount}</button></div><div className="view-switch" role="group" aria-label={t("viewAria")}><button className={view === "cards" ? "selected" : ""} aria-pressed={view === "cards"} onClick={() => setView("cards")}>{t("cardsView")}</button><button className={view === "matrix" ? "selected" : ""} aria-pressed={view === "matrix"} onClick={() => setView("matrix")}>{t("matrixView")}</button></div></div>
+      <div className="task-toolbar"><div className="task-tabs" role="group" aria-label={t("statusAria")}><button className={!showDone ? "selected" : ""} aria-pressed={!showDone} onClick={() => setShowDone(false)}>{t("todoTab")} {openCount}</button><button className={showDone ? "selected" : ""} aria-pressed={showDone} onClick={() => setShowDone(true)}>{t("doneTab")} {tasks.length - openCount}</button></div><div className="view-switch" role="group" aria-label={t("viewAria")}><button className={view === "cards" ? "selected" : ""} aria-pressed={view === "cards"} onClick={() => setView("cards")}>{t("cardsView")}</button><button className={view === "matrix" ? "selected" : ""} aria-pressed={view === "matrix"} onClick={() => setView("matrix")}>{t("matrixView")}</button><button className={view === "tree" ? "selected" : ""} aria-pressed={view === "tree"} onClick={() => setView("tree")}>{t("eventTreeView")}</button></div></div>
     </div>
     {view === "cards" ? <section className="task-schedule">
         <div className="stack-heading"><span>{selectedDay ? new Intl.DateTimeFormat(uiLocale(), { month: "long", day: "numeric" }).format(center) : t("unscheduled")} · {fill("tasksCount", { n: ordered.length })}</span><span>{t("byTime")}</span></div>
@@ -65,6 +66,6 @@ export function TasksPage({ serverMode = false, tasks, initialDay, toggle, updat
             <div className="card-actions">{serverMode && task.done ? <button className="button button-outline" onClick={() => openReport(task)}>{t("viewReport")}</button> : <><button className="button button-outline" onClick={() => editTask(task)}>{t("editDetails")}</button><button className="button button-primary" onClick={() => toggle(task.id)}><Icon name="check" size={18} /> {task.done ? t("restoreTodo") : t("markDone")}</button></>}</div>
           </article></div>)}
         </div> : <div className="empty-state">{selectedDay ? t("emptyDay") : t("emptyUnscheduled")}</div>}
-      </section> : <div className="matrix-workspace"><p className="matrix-note">{showDone ? t("allDoneTasks") : t("allOpenTasks")} · {serverMode ? t("matrixNoteServer") : t("matrixNoteLocal")}</p><div className="matrix" aria-label={t("matrixAria")}>{quadrants.map((section) => <section className={`quadrant q-${section.id}`} key={section.id}><div className="quadrant-heading"><div><h2>{section.title()}</h2><span>{section.action()}</span></div><strong>{matching.filter((task) => quadrant(task) === section.id).length}</strong></div><div className="quadrant-body">{matching.filter((task) => quadrant(task) === section.id).sort((a, b) => priorityScore(b) - priorityScore(a)).map((task) => <TaskRow key={task.id} task={task} toggle={toggle} edit={serverMode && task.done ? undefined : () => editTask(task)} serverMode={serverMode} openReport={serverMode && task.done ? () => openReport(task) : undefined} />)}</div></section>)}</div></div>}
+      </section> : view === "tree" ? <EventTreeView tasks={matching} serverMode={serverMode} toggle={toggle} editTask={editTask} openReport={openReport} /> : <div className="matrix-workspace"><p className="matrix-note">{showDone ? t("allDoneTasks") : t("allOpenTasks")} · {serverMode ? t("matrixNoteServer") : t("matrixNoteLocal")}</p><div className="matrix" aria-label={t("matrixAria")}>{quadrants.map((section) => <section className={`quadrant q-${section.id}`} key={section.id}><div className="quadrant-heading"><div><h2>{section.title()}</h2><span>{section.action()}</span></div><strong>{matching.filter((task) => quadrant(task) === section.id).length}</strong></div><div className="quadrant-body">{matching.filter((task) => quadrant(task) === section.id).sort((a, b) => priorityScore(b) - priorityScore(a)).map((task) => <TaskRow key={task.id} task={task} toggle={toggle} edit={serverMode && task.done ? undefined : () => editTask(task)} serverMode={serverMode} openReport={serverMode && task.done ? () => openReport(task) : undefined} />)}</div></section>)}</div></div>}
   </div>;
 }
