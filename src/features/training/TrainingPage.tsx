@@ -3,7 +3,8 @@ import { priorityScore, type Task } from "../tasks/mockTasks";
 import { cellFeedback, shuffledBoard, shuffledColors, type Difficulty } from "./trainingGame";
 import { circularRingSizes, circularSegments, ringRotation } from "./circularBoard";
 import { requestTrainingFeedback, type TrainingFeedback } from "./trainingFeedback";
-import { getRoundInsight } from "./trainingInsight";
+import { getRoundInsight, summarizeRound } from "./trainingInsight";
+import { csrf, saveTrainingSummary } from "../tasks/agentApi";
 import { Icon } from "../../shared/Icon";
 import { fill, t, uiLocale } from "../../shared/i18n.ts";
 import "./TrainingPage.css";
@@ -66,6 +67,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
   const startAt = useRef(0);
   const completed = useRef(false);
   const mounted = useRef(false);
+  const uploadedSummaries = useRef(new Set<string>());
   const boardWrap = useRef<HTMLDivElement>(null);
   const resultWrap = useRef<HTMLElement>(null);
   const nextTask = [...tasks].filter((task) => !task.done).sort((a, b) => priorityScore(b) - priorityScore(a))[0];
@@ -88,6 +90,23 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     if (!mounted.current) { mounted.current = true; return; }
     try { localStorage.setItem(roundsStorageKey, JSON.stringify(rounds)); }
     catch { /* Training still works when browser storage is unavailable. */ }
+  }, [rounds]);
+  useEffect(() => {
+    const unsynced = rounds.filter((round) => round.taps?.length === 25 && !uploadedSummaries.current.has(round.id));
+    if (!unsynced.length) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await csrf();
+        for (const round of unsynced) {
+          if (cancelled) return;
+          uploadedSummaries.current.add(round.id);
+          try { await saveTrainingSummary(summarizeRound(round), token); }
+          catch { uploadedSummaries.current.delete(round.id); }
+        }
+      } catch { /* Training history remains usable when account sync is unavailable. */ }
+    })();
+    return () => { cancelled = true; };
   }, [rounds]);
   useEffect(() => {
     if (phase !== "countdown") return;

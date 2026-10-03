@@ -3,12 +3,13 @@ import Markdown from "react-markdown";
 import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
 import { fill, getLang, t } from "../../shared/i18n.ts";
-import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposalBatches, getRunProposals, runProgressMessage, sendMessage, withLocalContext, type Proposal, type ProposalBatch, type Run } from "./agentApi";
+import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposalBatches, getRunProposals, getTask, runProgressMessage, sendMessage, withLocalContext, type AgentStructuredResult, type Proposal, type ProposalBatch, type Run, type ServerTask } from "./agentApi";
 import { startAudioCapture, type AudioCapture, type CapturedAudio } from "./audioCapture";
 import { browserAsrIsReady, prepareBrowserAsr, transcribeBrowser } from "./speech/browserAsr";
 import { ProposalBatchReview } from "./ProposalBatchReview";
 import { ProposalCarousel } from "./ProposalCarousel";
 import { RunEventCursor } from "./runEventCursor";
+import { TaskResultCarousel } from "./TaskResultCarousel";
 import "./TaskComposer.css";
 
 type Message = { role: "user" | "assistant"; text: string };
@@ -20,7 +21,7 @@ function mergeProposals(current: Proposal[], incoming: Proposal[]) {
   return [...merged.values()];
 }
 
-export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; guestQuota?: GuestQuota; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
+export function VoiceAssistant({ expanded, initialText, openTaskCount, guestQuota, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; openTaskCount: number; guestQuota?: GuestQuota; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
   const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const proposalBatchEnd = useRef<HTMLDivElement>(null);
@@ -41,6 +42,8 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
   const activeRunId = useRef("");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [structuredResult, setStructuredResult] = useState<AgentStructuredResult | null>(null);
+  const [resultTasks, setResultTasks] = useState<ServerTask[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [proposalFocusId, setProposalFocusId] = useState<string>();
   const [proposalBatches, setProposalBatches] = useState<ProposalBatch[]>([]);
@@ -75,6 +78,7 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
           activeRunId.current = "";
           setProgress("");
           if (run.status === "completed") {
+            await applyRunResult(run, session);
             pendingMessage.current = { content: "", payload: "", id: "", shown: false, language: getLang() };
             setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || t("errNoReply") }]);
           } else setError(`${t("errRunFailed")}${run.error_code ? ` (${run.error_code})` : ""}`);
@@ -150,6 +154,19 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       const newestPending = [...legacy].reverse().find((proposal) => proposal.status === "pending");
       if (newestPending) setProposalFocusId(newestPending.proposal_id);
     });
+  }
+
+  async function applyRunResult(run: Run, session: number) {
+    if (!active.current || session !== sessionId.current) return;
+    const result = run.structured_result;
+    setStructuredResult(result);
+    if (!result?.task_refs?.length || result.result_type === "proposal_bundle") {
+      setResultTasks([]);
+      return;
+    }
+    const tasks = await Promise.all(result.task_refs.map((id) => getTask(id).catch(() => null)));
+    if (!active.current || session !== sessionId.current) return;
+    setResultTasks(tasks.filter((task): task is ServerTask => !!task && task.status === "open"));
   }
 
   function watchRun(runId: string, session: number): Promise<Run> {
@@ -363,14 +380,17 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     } finally { if (active.current && session === sessionId.current) setPreparing(false); }
   }
 
-  async function send() {
+  async function send(quickReply?: string) {
     const session = sessionId.current;
-    const content = inputRef.current.trim();
+    const content = (quickReply ?? inputRef.current).trim();
+    const previousRecommendedTaskId = structuredResult?.recommended_task_id || "";
     if (!content) { setError(t("errEmptyInput")); return; }
     if (content.length > 8000) { setError(t("errTooLong")); return; }
     if (guestQuota && guestQuota.left <= 0) { setError(t("errGuestQuota")); return; }
     setBusy(true);
     setError("");
+    setStructuredResult(null);
+    setResultTasks([]);
     try {
       const token = await csrf();
       if (session !== sessionId.current) return;
@@ -381,7 +401,7 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       if (session !== sessionId.current) return;
       const language = getLang();
       if (pendingMessage.current.content !== content || pendingMessage.current.language !== language) {
-        pendingMessage.current = { content, payload: withLocalContext(content, language), id: crypto.randomUUID(), shown: false, language };
+        pendingMessage.current = { content, payload: withLocalContext(content, language, previousRecommendedTaskId), id: crypto.randomUUID(), shown: false, language };
       }
       const { run_id } = await sendMessage(conversationId.current, pendingMessage.current.payload, pendingMessage.current.id, token);
       if (session !== sessionId.current) return;
@@ -397,6 +417,8 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       lastAudio.current = null;
       setClarification("");
       const run = await watchRun(run_id, session);
+      if (session !== sessionId.current) return;
+      await applyRunResult(run, session);
       if (session !== sessionId.current) return;
       activeRunId.current = "";
       setProgress("");
@@ -434,6 +456,17 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     finally { setBusy(false); }
   }
 
+  const hasPendingProposal = proposals.some((proposal) => proposal.status === "pending" && Date.parse(proposal.expires_at) > Date.now())
+    || proposalBatches.some((batch) => batch.status === "pending" && batch.proposals.some((proposal) => proposal.status === "pending"));
+  const initialPrompts = openTaskCount > 1
+    ? [t("initialManyToday"), t("initialManyFirst"), t("initialManyArrange")]
+    : openTaskCount === 1
+      ? [t("initialOneStart"), t("initialOneToday"), t("initialOneSplit")]
+      : [t("initialNoneRemember"), t("initialNoneAdd"), t("initialNonePlan")];
+  const quickPrompts = structuredResult?.suggested_prompts.length
+    ? structuredResult.suggested_prompts
+    : messages.length === 0 ? initialPrompts : [];
+
   return <div className={`voice-capture ${expanded ? "is-open" : ""}`}>
     {expanded && <button className="voice-close" type="button" onClick={close} aria-label={t("collapseAria")}><Icon name="close" size={18} /></button>}
     <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening ? t("stopSendAria") : t("recordAgainAria") : t("micAsk")}>
@@ -455,6 +488,10 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       <div ref={proposalBatchEnd} />
     </div>}
     <ProposalCarousel proposals={proposals} busy={busy} focusProposalId={proposalFocusId} onDecide={(proposal, accept) => void decide(proposal, accept)} />
+    {!hasPendingProposal && structuredResult?.result_type !== "proposal_bundle" && <TaskResultCarousel tasks={resultTasks} recommendedTaskId={structuredResult?.recommended_task_id || ""} />}
+    {!busy && !hasPendingProposal && quickPrompts.length > 0 && <div className="assistant-quick-replies" aria-label={t("quickRepliesLabel")}>
+      {quickPrompts.map((prompt, index) => <button key={`${index}:${prompt}`} type="button" onClick={() => void send(prompt)}>{prompt}</button>)}
+    </div>}
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
     <label className="field-label" htmlFor="voice-input">{t("chatLabel")}</label>
     <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder={t("chatPlaceholder")} />

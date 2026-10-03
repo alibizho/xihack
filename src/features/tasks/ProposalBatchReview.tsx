@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { ApiRequestError } from "../../shared/api.ts";
+import { Icon } from "../../shared/Icon";
 import { fill, t, uiLocale } from "../../shared/i18n.ts";
 import {
   cancelProposalBatchItem,
@@ -79,6 +80,7 @@ export function ProposalBatchReview({
   disabled: boolean;
 }) {
   const [editing, setEditing] = useState<Record<string, TaskDraft>>({});
+  const [activeIndexByBatch, setActiveIndexByBatch] = useState<Record<string, number>>({});
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const keys = useRef(new Map<string, string>());
@@ -129,12 +131,16 @@ export function ProposalBatchReview({
     {batches.map((batch, batchIndex) => {
       const pendingCount = batch.proposals.filter((proposal) => proposal.status === "pending").length;
       const batchDisabled = disabled || busyId === batch.batch_id || batch.status !== "pending";
+      const activeIndex = Math.min(activeIndexByBatch[batch.batch_id] || 0, Math.max(0, batch.proposals.length - 1));
       return <section className="voice-proposal-batch" key={batch.batch_id} aria-label={t("batchHeading")}>
         <header className="voice-proposal-batch-head">
           <strong>{t("batchHeading")} {batchIndex + 1}</strong>
           <span>{batch.status === "pending" ? fill("batchPendingCount", { n: pendingCount }) : t(batch.status === "confirmed" ? "batchConfirmed" : batch.status === "expired" ? "batchExpired" : "batchCancelled")}</span>
         </header>
+        <div className="voice-batch-carousel">
+        {batch.proposals.length > 1 && <button className="proposal-nav" type="button" disabled={activeIndex <= 0} onClick={() => setActiveIndexByBatch((current) => ({ ...current, [batch.batch_id]: activeIndex - 1 }))} aria-label={t("proposalPrevious")}><Icon name="chevronLeft" size={22} /></button>}
         {batch.proposals.map((proposal, itemIndex) => {
+          if (itemIndex !== activeIndex) return null;
           const task = proposal.task;
           const draft = editing[proposal.proposal_id];
           return <article className="voice-proposal" key={proposal.proposal_id}>
@@ -186,6 +192,9 @@ export function ProposalBatchReview({
             </>}
           </article>;
         })}
+        {batch.proposals.length > 1 && <button className="proposal-nav" type="button" disabled={activeIndex >= batch.proposals.length - 1} onClick={() => setActiveIndexByBatch((current) => ({ ...current, [batch.batch_id]: activeIndex + 1 }))} aria-label={t("proposalNext")}><Icon name="chevronRight" size={22} /></button>}
+        </div>
+        {batch.proposals.length > 1 && <p className="proposal-progress" aria-live="polite">{activeIndex + 1} / {batch.proposals.length}</p>}
         {batch.status === "pending" && <button className="voice-batch-confirm" type="button" disabled={batchDisabled || pendingCount === 0 || Object.keys(editing).some((id) => batch.proposals.some((item) => item.proposal_id === id))} onClick={() => void confirm(batch)}>
           {fill("batchConfirmWrite", { n: pendingCount })}
         </button>}

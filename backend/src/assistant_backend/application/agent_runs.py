@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from assistant_backend.application.agent_dto import RunAccepted, RunEventView, RunStatus
+from assistant_backend.application.agent_dto import RunAccepted, RunEventView, RunStatus, StructuredAgentResult
 from assistant_backend.config import Settings
 from assistant_backend.domain.conversations import title_from_first_message
 from assistant_backend.infrastructure.models import (
@@ -185,6 +185,11 @@ class AgentRunService:
                 user_message_id=run.user_message_id,
                 assistant_message_id=run.final_message_id,
                 assistant_content=assistant.content if assistant else None,
+                structured_result=(
+                    StructuredAgentResult.model_validate(run.structured_result)
+                    if run.structured_result
+                    else None
+                ),
                 error_code=run.error_code,
                 created_at=run.created_at,
                 updated_at=run.updated_at,
@@ -379,6 +384,7 @@ class AgentRunService:
         content: str,
         input_tokens: int,
         output_tokens: int,
+        structured_result: dict | None = None,
     ) -> bool:
         now = _utcnow()
         with self.factory.begin() as session:
@@ -418,6 +424,7 @@ class AgentRunService:
             run.status = "completed"
             run.phase = "completed"
             run.final_message_id = assistant.message_id
+            run.structured_result = structured_result
             run.input_tokens += input_tokens
             run.output_tokens += output_tokens
             run.worker_id = None
@@ -428,7 +435,11 @@ class AgentRunService:
                 session,
                 run,
                 "run.completed",
-                {"run_id": run_id, "assistant_message_id": assistant.message_id},
+                {
+                    "run_id": run_id,
+                    "assistant_message_id": assistant.message_id,
+                    "structured_result": structured_result,
+                },
                 now,
             )
             return True

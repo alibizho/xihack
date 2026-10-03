@@ -104,6 +104,7 @@ def _snapshot(status: RunStatus) -> str:
         "phase": status.phase,
         "assistant_message_id": status.assistant_message_id,
         "assistant_content": status.assistant_content,
+        "structured_result": status.structured_result,
         "last_event_sequence": status.last_event_sequence,
     }
     data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

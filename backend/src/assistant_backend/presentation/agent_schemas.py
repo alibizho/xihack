@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from assistant_backend.application.agent_dto import StructuredAgentResult
+
 
 class MessageSubmitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -36,6 +38,7 @@ class RunStatusResponse(BaseModel):
     user_message_id: str
     assistant_message_id: str | None
     assistant_content: str | None
+    structured_result: StructuredAgentResult | None
     error_code: str | None
     created_at: datetime
     updated_at: datetime

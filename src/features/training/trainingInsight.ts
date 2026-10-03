@@ -2,6 +2,26 @@ import type { Difficulty } from "./trainingGame";
 
 export type CompletedRound = { difficulty: Difficulty; seconds: number; mistakes: number; taps: number[] };
 
+export function summarizeRound(round: CompletedRound & { id: string; variant?: "grid" | "circle"; completedAt: string }) {
+  const intervals = round.taps.map((time, index) => time - (round.taps[index - 1] || 0));
+  const average = (items: number[]) => items.length ? items.reduce((sum, value) => sum + value, 0) / items.length : 0.1;
+  const hour = new Date(round.completedAt).getHours();
+  const dayPeriod = hour >= 5 && hour < 12 ? "morning" : hour < 17 ? "afternoon" : hour < 22 ? "evening" : "night";
+  return {
+    client_round_id: round.id,
+    day_period: dayPeriod,
+    difficulty: round.difficulty,
+    variant: round.variant || "grid",
+    duration_seconds: Number(Math.max(0.1, round.seconds).toFixed(2)),
+    mistakes: round.mistakes,
+    average_step_seconds: Number(average(intervals).toFixed(3)),
+    first_half_seconds: Number(average(intervals.slice(0, 12)).toFixed(3)),
+    second_half_seconds: Number(average(intervals.slice(12)).toFixed(3)),
+    max_pause_seconds: Number(Math.max(0.1, ...intervals).toFixed(3)),
+    completed_at: round.completedAt,
+  };
+}
+
 export function getRoundInsight(round: CompletedRound, language: "zh" | "en" = "zh") {
   const intervals = round.taps.map((time, index) => time - (round.taps[index - 1] || 0));
   const average = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;

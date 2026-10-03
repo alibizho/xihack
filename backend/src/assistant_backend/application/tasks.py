@@ -208,7 +208,7 @@ class TaskService:
     def report_insights(self, user_id: str, limit: int = 10) -> list[dict[str, str]]:
         with self.factory() as session:
             rows = session.execute(
-                select(Task.title, TaskReport.summary, TaskReport.blocker, TaskReport.next_step)
+                select(Task.task_id, Task.title, TaskReport.summary, TaskReport.blocker, TaskReport.next_step)
                 .join(Task, Task.task_id == TaskReport.task_id)
                 .where(TaskReport.user_id == user_id, TaskReport.analyzed_at.is_not(None))
                 .order_by(TaskReport.created_at.desc())
@@ -216,12 +216,13 @@ class TaskService:
             )
             return [
                 {
+                    "task_id": task_id,
                     "task": title,
                     "summary": summary or "",
                     "blocker": blocker or "",
                     "next_step": next_step or "",
                 }
-                for title, summary, blocker, next_step in rows
+                for task_id, title, summary, blocker, next_step in rows
             ]
 
     def create_proposal(

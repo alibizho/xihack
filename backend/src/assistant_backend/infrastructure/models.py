@@ -5,6 +5,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -240,6 +241,7 @@ class AgentRun(Base):
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(64))
+    structured_result: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -258,3 +260,30 @@ class RunEvent(Base):
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TrainingRoundSummary(Base):
+    __tablename__ = "training_round_summaries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_round_id", name="uq_training_summary_user_round"),
+        CheckConstraint("day_period IN ('morning', 'afternoon', 'evening', 'night')", name="ck_training_summary_period"),
+        CheckConstraint("difficulty IN ('beginner', 'normal', 'advanced')", name="ck_training_summary_difficulty"),
+        CheckConstraint("variant IN ('grid', 'circle')", name="ck_training_summary_variant"),
+        CheckConstraint("duration_seconds > 0 AND duration_seconds <= 1200", name="ck_training_summary_duration"),
+        CheckConstraint("mistakes BETWEEN 0 AND 500", name="ck_training_summary_mistakes"),
+        Index("ix_training_summary_user_completed", "user_id", "completed_at"),
+    )
+
+    summary_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"))
+    client_round_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    day_period: Mapped[str] = mapped_column(String(16), nullable=False)
+    difficulty: Mapped[str] = mapped_column(String(16), nullable=False)
+    variant: Mapped[str] = mapped_column(String(16), nullable=False)
+    duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    mistakes: Mapped[int] = mapped_column(Integer, nullable=False)
+    average_step_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    first_half_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    second_half_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    max_pause_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

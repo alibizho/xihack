@@ -1,11 +1,12 @@
 import json
 from datetime import date
-from typing import Any, Literal
+from typing import Any, Annotated, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from assistant_backend.application.tasks import TaskFailure, TaskService
+from assistant_backend.application.training import TrainingSummaryService
 from assistant_backend.presentation.schemas import (
     ProposalCreateRequest,
     ProposalOperation,
@@ -24,7 +25,7 @@ class SearchTaskArguments(BaseModel):
     urgent: bool | None = None
     status: Literal["open", "completed"] | None = None
     category: str | None = Field(default=None, max_length=64)
-    limit: int = Field(default=20, ge=1, le=20)
+    limit: int = Field(default=10, ge=1, le=10)
 
 
 class GetTaskArguments(BaseModel):
@@ -39,7 +40,36 @@ class SearchReportArguments(BaseModel):
     limit: int = Field(default=10, ge=1, le=10)
 
 
+class TrainingSummaryArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    day_period: Literal["morning", "afternoon", "evening", "night"]
+
+
+class FinishTurnArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result_type: Literal["message", "task_query", "advice", "clarification", "proposal_bundle"]
+    message: str = Field(min_length=1, max_length=1200)
+    task_refs: list[Annotated[str, Field(min_length=1, max_length=36)]] = Field(default_factory=list, max_length=10)
+    recommended_task_id: str = Field(default="", max_length=36)
+    suggested_prompts: list[Annotated[str, Field(min_length=1, max_length=120)]] = Field(default_factory=list, max_length=3)
+
+
 READ_ONLY_TASK_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_training_summary",
+            "description": "Read compact, account-owned focus training metrics only when planning/advising. Never use them for simple task creation or ordinary task queries. Training is a low-priority tie-breaker, not a capability or health assessment.",
+            "parameters": {
+                "type": "object",
+                "properties": {"day_period": {"type": "string", "enum": ["morning", "afternoon", "evening", "night"]}},
+                "required": ["day_period"],
+                "additionalProperties": False,
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -68,7 +98,7 @@ READ_ONLY_TASK_TOOLS = [
                     "urgent": {"type": "boolean"},
                     "status": {"type": "string", "enum": ["open", "completed"]},
                     "category": {"type": "string", "maxLength": 64},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 10},
                 },
                 "required": [],
                 "additionalProperties": False,
@@ -90,6 +120,26 @@ READ_ONLY_TASK_TOOLS = [
         },
     },
 ]
+
+FINAL_RESULT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "finish_turn",
+        "description": "Finish the user-facing turn. Provide a brief natural message, accurate result type, up to ten task IDs from this run's search_tasks/get_task tool results, the recommended ID if any, and up to three next-step prompts in the current UI language. Never invent a task ID. Use empty string when there is no recommendation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "result_type": {"type": "string", "enum": ["message", "task_query", "advice", "clarification", "proposal_bundle"]},
+                "message": {"type": "string", "minLength": 1, "maxLength": 1200},
+                "task_refs": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 36}, "maxItems": 10},
+                "recommended_task_id": {"type": "string", "maxLength": 36},
+                "suggested_prompts": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 120}, "maxItems": 3},
+            },
+            "required": ["result_type", "message", "task_refs", "recommended_task_id", "suggested_prompts"],
+            "additionalProperties": False,
+        },
+    },
+}
 
 
 def _due_schema() -> dict[str, Any]:
@@ -215,16 +265,21 @@ PROPOSAL_TOOLS = [
     ),
 ]
 
-TASK_TOOLS = [*READ_ONLY_TASK_TOOLS, *PROPOSAL_TOOLS]
+TASK_TOOLS = [*READ_ONLY_TASK_TOOLS, *PROPOSAL_TOOLS, FINAL_RESULT_TOOL]
 
 
 class ReadOnlyTaskTools:
-    def __init__(self, service: TaskService, user_id: str) -> None:
+    def __init__(self, service: TaskService, user_id: str, training: TrainingSummaryService | None = None) -> None:
         self.service = service
         self.user_id = user_id
+        self.training = training
 
     def invoke(self, name: str, raw_arguments: str) -> str:
         try:
+            if name == "get_training_summary":
+                args = TrainingSummaryArguments.model_validate_json(raw_arguments)
+                summary = self.training.recent(self.user_id, args.day_period) if self.training else {"available": False, "sample_count": 0, "trend": "insufficient_data"}
+                return json.dumps(summary, ensure_ascii=False)
             if name == "search_task_reports":
                 args = SearchReportArguments.model_validate_json(raw_arguments)
                 return json.dumps(
@@ -241,18 +296,39 @@ class ReadOnlyTaskTools:
                     urgent=args.urgent,
                     status=args.status,
                     category=args.category,
-                    limit=args.limit,
+                    limit=min(args.limit, 10),
                 )
-                return json.dumps(result.model_dump(mode="json"), ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "items": [self._agent_task(item.model_dump(mode="json")) for item in result.items],
+                        "has_more": result.next_cursor is not None,
+                    },
+                    ensure_ascii=False,
+                )
             if name == "get_task":
                 args = GetTaskArguments.model_validate_json(raw_arguments)
                 result = self.service.get(self.user_id, args.task_id)
-                return json.dumps(result.model_dump(mode="json"), ensure_ascii=False)
+                return json.dumps(self._agent_task(result.model_dump(mode="json")), ensure_ascii=False)
             return json.dumps({"error": "unknown_tool"})
         except ValidationError:
             return json.dumps({"error": "invalid_arguments"})
         except TaskFailure as exc:
             return json.dumps({"error": exc.code.lower()})
+
+    @staticmethod
+    def _agent_task(task: dict) -> dict:
+        description = task.get("description")
+        return {
+            "task_id": task["task_id"],
+            "title": task["title"],
+            "description": description[:400] if isinstance(description, str) else None,
+            "category": task.get("category"),
+            "due": task.get("due"),
+            "importance": task["importance"],
+            "urgency": task["urgency"],
+            "status": task["status"],
+            "version": task["version"],
+        }
 
 
 class ProposalTaskTools:

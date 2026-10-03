@@ -5,6 +5,7 @@ from assistant_backend.agent.provider import ChatCompletionClient
 from assistant_backend.agent.runtime import AgentRuntime
 from assistant_backend.application.agent_runs import AgentRunService
 from assistant_backend.application.tasks import TaskService
+from assistant_backend.application.training import TrainingSummaryService
 from assistant_backend.config import Settings
 from assistant_backend.infrastructure.database import make_engine, make_session_factory
 
@@ -19,6 +20,7 @@ def run_worker() -> None:
         TaskService(factory),
         ChatCompletionClient(*settings.chat_provider),
         settings,
+        TrainingSummaryService(factory),
     )
     worker_id = str(uuid4())
     last_prune = 0.0

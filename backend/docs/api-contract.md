@@ -118,11 +118,11 @@ task_id 由服务端生成。importance 和 urgency 独立保存为 0.0–10.0�
 | 方法与路径 | 用途 |
 |---|---|
 | POST /api/conversations/{conversation_id}/messages | 原子保存用户消息并排队 Agent run，返回 202 |
-| GET /api/runs/{run_id} | 读取当前账号 run 状态、最终可见回复及错误码 |
+| GET /api/runs/{run_id} | 读取当前账号 run 状态、最终回复、结构化任务引用/快捷问题及错误码 |
 | GET /api/runs/{run_id}/events | 以 `text/event-stream` 订阅持久事件，支持 `Last-Event-ID` 或 `after` 序号续接 |
 | GET /api/runs/{run_id}/proposal-batches | 读取当前账号该 run 的结构化审核批次 |
 
-发送请求包含 `client_message_id`（1–128 字符）及 `content`（非空，最长 8000 字符），不接受 user_id。成功响应为 `{run_id,status,created_at,replayed}`。同一账号重用 message ID 且 conversation/content 相同，返回原 run；请求指纹不同返回 409 `IDEMPOTENCY_CONFLICT`。对话必须属于当前账号；消息和 run 在同一数据库事务中创建。只保存用户消息与最终助手可见回复，不保存 Tool 参数/返回值或模型内部推理。
+发送请求包含 `client_message_id`（1–128 字符）及 `content`（非空，最长 8000 字符），不接受 user_id。成功响应为 `{run_id,status,created_at,replayed}`。同一账号重用 message ID 且 conversation/content 相同，返回原 run；请求指纹不同返回 409 `IDEMPOTENCY_CONFLICT`。对话必须属于当前账号；消息和 run 在同一数据库事务中创建。只保存用户消息、最终助手可见回复及受 schema 校验的结构化结果，不保存 Tool 参数/返回值或模型内部推理。结构化结果包含 `result_type`、`message`、`task_refs`、`recommended_task_id` 和 `suggested_prompts`；引用只接受本 run 只读查询已返回的本人开放任务 ID。
 
 消息 POST 校验 Origin 与 `X-CSRF-Token`。提交限流为每账号 10 次/小时、最多 2 个并发 run；每 IP 30 次/小时；全局 10 次/分钟。超限返回 429。每 run 最多 16 次模型请求、16 次只读 Tool 调用、180 秒、64K 输入与 8K 输出 tokens。金额硬上限另在供应商控制台配置，部署阶段再次核对。
 
@@ -143,7 +143,7 @@ task_id 由服务端生成。importance 和 urgency 独立保存为 0.0–10.0�
     event: run.completed
     data: {"run_id":"run_123","assistant_message_id":"message_456","sequence":5}
 
-阶段 4 事件包括 `run.started`、`run.progress`、`message.delta`、`run.completed`、`run.failed`、`run.snapshot` 及安全诊断事件。事件最多保留 7 天；游标早于仍保留的最早序号时先发 `run.snapshot`（含当前状态、最终回复和最新序号），随后从该序号继续。游标无效返回 422。`GET /api/runs/{run_id}` 可在任何时候读取当前状态。跨账号 run ID 统一 404。
+阶段 4 事件包括 `run.started`、`run.progress`、`message.delta`、`run.completed`、`run.failed`、`run.snapshot` 及安全诊断事件。最终自然语言通过 `message.delta` 增量返回；Tool 参数、查询 JSON 与 reasoning 不发送给客户端。完成事件与 `run.snapshot` 可携带结构化结果。事件最多保留 7 天；游标早于仍保留的最早序号时先发 `run.snapshot`（含当前状态、最终回复、结构化结果和最新序号），随后从该序号继续。游标无效返回 422。`GET /api/runs/{run_id}` 可在任何时候读取当前状态。跨账号 run ID 统一 404。
 
 Worker 由 `uv run python -m assistant_backend.worker` 启动，使用数据库 lease 与 `SKIP LOCKED` 领取 queued run。重启后 queued run 可继续领取；lease 过期的 in-progress run 收敛为 `failed/WORKER_INTERRUPTED`，不重放可能已经计费的模型调用。失败时保留用户消息并提供安全错误码。对话永久删除通过外键级联清理 run/event/message；worker 每次写事件或助手回复前锁定并复核对话仍存在，防止删除后复活数据；任务表不关联对话，任务不会被删除。阶段 4 没有显式取消 run API，SSE 断开仅停止订阅。
 
@@ -204,9 +204,13 @@ Agent 多任务创建通过单个内部 `propose_create_tasks({tasks:[...]})` To
 
 校准和回退均不创建 Agent 对话消息或 Agent Run。用户编辑并明确发送草稿后才调用第 6 节的消息 POST；所有任务写入意图仍必须生成待确认提案，并由用户确认。当前语音接口同步返回，不提供 transcription run/SSE。前端本地模型与兼容范围见 ADR 0005。
 
-### 训练
+### 训练摘要
 
-训练模块首期暂缓，不进入 OpenAPI。未来是否增加 /api/training/ 由单独产品与接口评审决定。
+| 方法与路径 | 用途 |
+|---|---|
+| POST /api/training/summaries | 将本账号已完成的一局专注训练摘要幂等保存，供规划建议按需读取 |
+
+正文仅接收派生指标：回合 ID、用户本地时段、难度和布局、总用时、误触次数、平均单步、前后半程均值、最大停顿及完成时间；不接受点击序列、原始音频或任务内容。身份从会话 Cookie 获取，写入校验 Origin 与 CSRF；相同账号/回合 ID 只保存一次。保留最多 90 天。只读 Agent Tool `get_training_summary` 仅在规划/建议场景返回代码计算的近期平均值、时段趋势及样本数，并受账号隔离。训练只作为低优先级排序参考，不做注意力、能力、人格或健康判断。
 
 ## 9. 错误、限流与隐私
 

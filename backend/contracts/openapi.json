@@ -2515,6 +2515,78 @@
         }
       }
     },
+    "/api/training/summaries": {
+      "post": {
+        "tags": [
+          "training"
+        ],
+        "summary": "Save Summary",
+        "operationId": "save_summary_api_training_summaries_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingSummaryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/runs/{run_id}/events": {
       "get": {
         "tags": [
@@ -3781,6 +3853,17 @@
           "last_event_sequence": {
             "type": "integer",
             "title": "Last Event Sequence"
+          },
+          "structured_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructuredAgentResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structured Result"
           }
         },
         "additionalProperties": false,
@@ -3792,12 +3875,151 @@
           "user_message_id",
           "assistant_message_id",
           "assistant_content",
+          "structured_result",
           "error_code",
           "created_at",
           "updated_at",
           "last_event_sequence"
         ],
         "title": "RunStatusResponse"
+      },
+      "StructuredAgentResult": {
+        "properties": {
+          "result_type": {
+            "type": "string",
+            "enum": [
+              "message",
+              "task_query",
+              "advice",
+              "clarification",
+              "proposal_bundle"
+            ],
+            "title": "Result Type"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200,
+            "title": "Message"
+          },
+          "task_refs": {
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Task Refs"
+          },
+          "recommended_task_id": {
+            "type": "string",
+            "maxLength": 36,
+            "title": "Recommended Task Id"
+          },
+          "suggested_prompts": {
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Suggested Prompts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "result_type",
+          "message",
+          "task_refs",
+          "recommended_task_id",
+          "suggested_prompts"
+        ],
+        "title": "StructuredAgentResult"
+      },
+      "TrainingSummaryInput": {
+        "properties": {
+          "client_round_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "title": "Client Round Id"
+          },
+          "day_period": {
+            "type": "string",
+            "pattern": "^(morning|afternoon|evening|night)$",
+            "title": "Day Period"
+          },
+          "difficulty": {
+            "type": "string",
+            "pattern": "^(beginner|normal|advanced)$",
+            "title": "Difficulty"
+          },
+          "variant": {
+            "type": "string",
+            "pattern": "^(grid|circle)$",
+            "title": "Variant"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1200,
+            "title": "Duration Seconds"
+          },
+          "mistakes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500,
+            "title": "Mistakes"
+          },
+          "average_step_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 60,
+            "title": "Average Step Seconds"
+          },
+          "first_half_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 60,
+            "title": "First Half Seconds"
+          },
+          "second_half_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 60,
+            "title": "Second Half Seconds"
+          },
+          "max_pause_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1200,
+            "title": "Max Pause Seconds"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Completed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "client_round_id",
+          "day_period",
+          "difficulty",
+          "variant",
+          "duration_seconds",
+          "mistakes",
+          "average_step_seconds",
+          "first_half_seconds",
+          "second_half_seconds",
+          "max_pause_seconds",
+          "completed_at"
+        ],
+        "title": "TrainingSummaryInput"
       },
       "SpeechDraftRequest": {
         "properties": {

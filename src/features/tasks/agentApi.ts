@@ -18,7 +18,14 @@ export type ProposalBatch = {
 export type TaskDraft = Pick<ServerTask, "title" | "description" | "category" | "due" | "importance" | "urgency">;
 export type Run = {
   run_id: string; status: "queued" | "running" | "completed" | "failed" | "cancelled";
-  phase: string; assistant_content: string | null; error_code: string | null; last_event_sequence: number;
+  phase: string; assistant_content: string | null; structured_result: AgentStructuredResult | null; error_code: string | null; last_event_sequence: number;
+};
+export type AgentStructuredResult = {
+  result_type: "message" | "task_query" | "advice" | "clarification" | "proposal_bundle";
+  message: string;
+  task_refs: string[];
+  recommended_task_id: string;
+  suggested_prompts: string[];
 };
 export function runProgressMessage(phase: string, itemCount?: number): string {
   if (phase === "organizing_request") return t("runOrganizing");
@@ -62,15 +69,18 @@ export const enhanceTranscription = (audio: Blob, token: string) => {
 export const transcribeAudio = enhanceTranscription;
 export const createConversation = (token: string, requestId: string) => post<{ conversation_id: string }>("/conversations", { client_request_id: requestId, title: t("voiceChatTitle") }, token);
 // Keep local time and UI language in the saved message until runs have context metadata.
-export function withLocalContext(text: string, language: "zh" | "en" = getLang()): string {
+export function withLocalContext(text: string, language: "zh" | "en" = getLang(), previousRecommendedTaskId = ""): string {
   const now = new Date();
   const pad = (value: number) => String(value).padStart(2, "0");
   const localTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  const context = `[应用提供的用户本地时间：${localTime}；时区：${Intl.DateTimeFormat().resolvedOptions().timeZone}；APP_CONTEXT ui_language=${language}]\n`;
+  const recommendation = previousRecommendedTaskId ? `；APP_CONTEXT previous_recommended_task_id=${previousRecommendedTaskId}` : "";
+  const context = `[应用提供的用户本地时间：${localTime}；时区：${Intl.DateTimeFormat().resolvedOptions().timeZone}；APP_CONTEXT ui_language=${language}${recommendation}]\n`;
   return context.length + text.length <= 8000 ? context + text : text;
 }
 export const sendMessage = (conversationId: string, text: string, messageId: string, token: string) => post<{ run_id: string }>(`/conversations/${conversationId}/messages`, { client_message_id: messageId, content: text }, token);
 export const getRun = (runId: string) => api<Run>(`/runs/${runId}`);
+export const getTask = (taskId: string) => api<ServerTask>(`/tasks/${encodeURIComponent(taskId)}`);
+export const saveTrainingSummary = (summary: object, token: string) => post<void>("/training/summaries", summary, token);
 export const getRunProposals = (runId: string) => api<Proposal[]>(`/runs/${runId}/proposals`);
 export const getRunProposalBatches = (runId: string) => api<ProposalBatch[]>(`/runs/${runId}/proposal-batches`);
 export const getProposalBatch = (batchId: string) => api<ProposalBatch>(`/proposal-batches/${batchId}`);

@@ -10,6 +10,7 @@ from assistant_backend.application.agent_runs import AgentRunService, RunFailure
 from assistant_backend.application.conversations import ConversationFailure, ConversationService
 from assistant_backend.application.tasks import TaskFailure, TaskService
 from assistant_backend.application.reports import ReportService
+from assistant_backend.application.training import TrainingSummaryService
 from assistant_backend.agent.provider import ChatCompletionClient, ChatReportAnalyzer
 from assistant_backend.application.speech import SpeechFailure, SpeechService
 from assistant_backend.config import Settings
@@ -20,6 +21,7 @@ from assistant_backend.presentation.conversations import router as conversations
 from assistant_backend.presentation.errors import ErrorResponse
 from assistant_backend.presentation.tasks import router as tasks_router
 from assistant_backend.presentation.speech import router as speech_router
+from assistant_backend.presentation.training import router as training_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -35,6 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.conversation_service = ConversationService(factory)
     app.state.agent_run_service = AgentRunService(factory, settings)
+    app.state.training_summary_service = TrainingSummaryService(factory)
     app.state.speech_service = SpeechService(factory, settings)
 
     @app.middleware("http")
@@ -101,6 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(conversations_router)
     app.include_router(agent_router)
     app.include_router(speech_router)
+    app.include_router(training_router)
     return app
 
 

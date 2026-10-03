@@ -10,7 +10,7 @@ FastAPI + PostgreSQL 单体。当前已实现账号会话、任务只读与提�
 | 消息、Agent run、SSE、只读任务 Tool | 代码与测试已存在；真实 provider 凭证验证待完成 |
 | Agent 生成任务写入提案 | 阶段 5 代码与测试已完成；仍须由用户确认提案才写任务 |
 | 前端本地语音转写、后端文字校准/业务核验 | 阶段 6 后端接口已实现；前端接入待联调，默认不上传音频，见 [ADR 0004](docs/adr-0004-local-voice.md) 和 [ADR 0005](docs/adr-0005-speech-stage-6.md) |
-| 训练 API / 眼动 | 不在后端范围；前端保留经典 5×5 舒尔特表 |
+| Agent 规划训练上下文 | `POST /api/training/summaries` 仅接收每局派生指标；Agent 只读摘要 Tool 按需读取，不接收点击原始序列 |
 
 ## Docker 本地启动
 
