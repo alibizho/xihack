@@ -92,9 +92,7 @@
   .week-step { width: 34px; height: 34px; }
   .unscheduled-button { padding: 0 7px; font-size: 11px; }
   .date-strip button { min-height: 60px; }
-  .task-toolbar { align-items: stretch; flex-direction: column; gap: 5px; }
-  .task-tabs, .view-switch { justify-content: space-between; gap: 2px; padding: 3px; border: 1px solid #d7e2e1; border-radius: 9px; background: #f1f5f2; }
-  .task-tabs button, .view-switch button { flex: 1; min-height: 34px; padding: 0 7px; border-radius: 6px; font-size: 11px; white-space: nowrap; }
+  .task-tabs button, .view-switch button { padding: 0 8px; }
   .task-slide { min-height: 0; grid-template-columns: 38px minmax(0, 1fr); gap: 5px; }
   .task-timeline { font-size: 9px; }
   .priority-card { display: block; padding: 15px; }
