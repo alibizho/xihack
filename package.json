@@ -6,7 +6,7 @@
     "dev": "vite --host localhost --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/features/tasks/mockTasks.test.ts src/features/tasks/agentApi.test.ts src/shared/api.test.ts src/features/profile/authApi.test.ts src/features/training/trainingGame.test.ts"
+    "test": "node --experimental-strip-types --test src/features/tasks/mockTasks.test.ts src/features/tasks/agentApi.test.ts src/shared/api.test.ts src/features/profile/authApi.test.ts src/features/profile/guest.test.ts src/features/training/trainingGame.test.ts"
   },
   "dependencies": {
     "@jspsych/extension-webgazer": "^1.2.0",

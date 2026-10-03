@@ -11,6 +11,9 @@
 .auth-consent input { width: 20px; height: 20px; accent-color: var(--blue); }
 .auth-card form .button { width: 100%; }
 .auth-switch { display: block; min-height: 44px; margin: 14px auto 0; padding: 8px; border: 0; background: transparent; color: var(--blue-dark); text-decoration: underline; }
+.auth-guest { display: block; width: 100%; min-height: 44px; margin: 10px 0 0; padding: 10px; border: 1px solid var(--blue, #426b82); border-radius: 12px; background: transparent; color: var(--blue-dark, #2e4c5f); font-weight: 700; }
+.auth-guest:disabled { opacity: .6; }
+.auth-guest-note { margin: 8px 0 0; color: #6b808b; font-size: 12px; text-align: center; }
 .auth-error { color: #a3434d; font-size: 13px; line-height: 1.5; }
 .auth-error button { display: block; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--blue-dark); text-decoration: underline; }
 .profile-page { max-width: 700px; margin: auto; animation: view-enter .32s ease both; }

@@ -3,7 +3,7 @@ import type { Task } from "../tasks/mockTasks";
 import { compareBySchedule, formatDue, parseDue, priorityScore } from "../tasks/mockTasks";
 import type { Capture } from "../../App";
 import { Icon } from "../../shared/Icon";
-import { VoiceAssistant } from "../tasks/VoiceAssistant";
+import { VoiceAssistant, type GuestQuota } from "../tasks/VoiceAssistant";
 import "./TodayPage.css";
 
 type Props = {
@@ -18,9 +18,10 @@ type Props = {
   onSessionExpired: () => void;
   onTasksChanged: () => void;
   onTaskCompleted: (taskId: string) => void;
+  guestQuota?: GuestQuota;
 };
 
-export function TodayPage({ tasks, history, navigate, voiceOpen, voiceText, openVoice, openTextChat, closeVoice, onSessionExpired, onTasksChanged, onTaskCompleted }: Props) {
+export function TodayPage({ tasks, history, navigate, voiceOpen, voiceText, openVoice, openTextChat, closeVoice, onSessionExpired, onTasksChanged, onTaskCompleted, guestQuota }: Props) {
   const [thought, setThought] = useState("");
   const open = tasks.filter((task) => !task.done);
   const next = [...open].sort(compareBySchedule)[0];
@@ -32,7 +33,7 @@ export function TodayPage({ tasks, history, navigate, voiceOpen, voiceText, open
     <header className="today-intro"><span>{date}</span><h1>{greeting}，<br />今天想先做什么？</h1></header>
     <section className={`assistant-panel ${voiceOpen ? "voice-active" : ""}`} aria-labelledby="capture-title">
       <span className="demo-pill">语音助理 · 账号事务</span>
-      <VoiceAssistant expanded={voiceOpen} initialText={voiceText} onOpen={openVoice} onClose={closeVoice} onSessionExpired={onSessionExpired} onTasksChanged={onTasksChanged} onTaskCompleted={onTaskCompleted} />
+      <VoiceAssistant expanded={voiceOpen} initialText={voiceText} guestQuota={guestQuota} onOpen={openVoice} onClose={closeVoice} onSessionExpired={onSessionExpired} onTasksChanged={onTasksChanged} onTaskCompleted={onTaskCompleted} />
       {!voiceOpen && <form className="quick-capture" onSubmit={(event) => { event.preventDefault(); if (thought.trim()) { openTextChat(thought.trim()); setThought(""); } }}>
         <label className="sr-only" htmlFor="quick-thought">发送文字给助理</label>
         <input id="quick-thought" maxLength={8000} value={thought} onChange={(event) => setThought(event.target.value)} placeholder="或者，直接告诉助理…" />
