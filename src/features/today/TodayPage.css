@@ -57,6 +57,14 @@
 .meditation-actions { display: flex; gap: 8px; }
 .meditation-actions .button { min-height: 44px; padding: 0 15px; border-radius: 8px; }
 .meditation-complete { margin: 0; color: var(--blue-dark); font-size: 12px; }
+.meditation-music { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-top: 14px; border-top: 1px solid #d8e5e3; }
+.meditation-music > div { display: flex; align-items: center; gap: 12px; color: var(--blue-dark); }
+.meditation-music > div > span { display: flex; flex-direction: column; gap: 2px; }
+.meditation-music strong { font-size: 13px; }
+.meditation-music small { color: var(--muted); font-size: 11px; }
+.meditation-music button { min-width: 74px; min-height: 44px; border: 1px solid #b8cfd2; border-radius: 8px; background: #f6fbf8; color: var(--blue-dark); font-size: 13px; font-weight: 700; }
+.meditation-music button[aria-pressed="true"] { background: #dcebf0; }
+.meditation-music p { flex-basis: 100%; margin: 0; color: #a25864; font-size: 12px; }
 .history-panel { margin-top: 16px; border: 1px solid #e9ece7; border-radius: 12px; background: var(--paper); padding: 0 20px; }
 .history-panel summary { min-height: 54px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 13px; font-weight: 600; }
 .history-panel summary span { color: #778a95; font-size: 11px; font-weight: 400; }
