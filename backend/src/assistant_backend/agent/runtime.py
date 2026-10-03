@@ -9,11 +9,26 @@ from assistant_backend.application.tasks import TaskService
 from assistant_backend.config import Settings
 
 
-SYSTEM_PROMPT = """你是拾序的事务助理。只回答用户问题，必要时调用任务查询工具。
-你可以为创建、修改、完成或删除任务保存结构化待确认提案，但绝不能直接写入任务；
-提案必须等待用户通过确认接口明确确认。不得声称任务已写入。信息不足时先追问。
+SYSTEM_PROMPT = """你是拾序的事务助理。查询用户事务时先调用任务查询工具，不凭记忆猜测清单。
+用户要求创建、修改、完成或删除事务时，必须调用对应 propose_* 工具保存结构化待确认提案；
+需要任务 ID 或版本时先调用查询工具。只有工具返回 status=pending 和 proposal_id，才能说提案已生成。
+只写一段文字不等于生成提案；工具报错时说明未生成，信息不足时先追问。
+提案必须等待用户通过确认接口明确确认。不得声称任务已写入。
 只使用当前对话和工具返回的数据，不推测其他对话或未提供的个人信息。
 工具参数不得包含 user_id。简洁、明确地用中文回复，不输出思维过程。"""
+
+PROPOSAL_CLAIM_MARKERS = (
+    "已生成待确认提案",
+    "已创建待确认提案",
+    "已保存待确认提案",
+    "提案已生成",
+    "提案已创建",
+    "提案已保存",
+    "已生成提案",
+    "已创建提案",
+    "已保存提案",
+    "已准备好提案",
+)
 
 
 class AgentRuntime:
@@ -39,6 +54,7 @@ class AgentRuntime:
             used_input = 0
             used_output = 0
             tool_calls_used = 0
+            proposal_saved = False
 
             for request_number in range(self.settings.agent_max_model_requests):
                 if time.monotonic() - started >= self.settings.agent_max_run_seconds:
@@ -66,6 +82,7 @@ class AgentRuntime:
 
                 calls: dict[int, ToolCallDelta] = defaultdict(lambda: ToolCallDelta(index=0))
                 response_text: list[str] = []
+                response_reasoning: list[str] = []
                 request_input_tokens = 0
                 request_output_tokens = 0
                 try:
@@ -89,6 +106,8 @@ class AgentRuntime:
                             aggregate.arguments += part.arguments
                         if chunk.content:
                             response_text.append(chunk.content)
+                        if chunk.reasoning_content:
+                            response_reasoning.append(chunk.reasoning_content)
                 except ProviderFailure as exc:
                     self._fail(run_id, worker_id, exc.code)
                     return
@@ -148,6 +167,7 @@ class AgentRuntime:
                             "role": "assistant",
                             "content": None,
                             "tool_calls": assistant_calls,
+                            "reasoning_content": "".join(response_reasoning),
                         }
                     )
                     for call in call_values:
@@ -164,6 +184,11 @@ class AgentRuntime:
                             return
                         if call.name.startswith("propose_"):
                             result = proposal_tools.invoke(call.name, call.arguments, call.call_id)
+                            proposal_result = json.loads(result)
+                            if proposal_result.get("status") == "pending" and proposal_result.get(
+                                "proposal_id"
+                            ):
+                                proposal_saved = True
                         else:
                             result = tools.invoke(call.name, call.arguments)
                         messages.append(
@@ -174,6 +199,11 @@ class AgentRuntime:
                 final_content = response_string.strip()
                 if "<tool_call" in final_content.lower():
                     self._fail(run_id, worker_id, "MODEL_INVALID_RESPONSE")
+                    return
+                if not proposal_saved and any(
+                    marker in final_content for marker in PROPOSAL_CLAIM_MARKERS
+                ):
+                    self._fail(run_id, worker_id, "PROPOSAL_NOT_CREATED")
                     return
                 if not final_content:
                     self._fail(run_id, worker_id, "EMPTY_MODEL_RESPONSE")

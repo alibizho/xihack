@@ -19,6 +19,7 @@ class ToolCallDelta:
 @dataclass
 class ChatDelta:
     content: str = ""
+    reasoning_content: str = ""
     tool_calls: list[ToolCallDelta] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
@@ -54,7 +55,7 @@ class MimoClient:
                 "tool_choice": "auto",
                 "stream": False,
                 "max_completion_tokens": max_output_tokens,
-                "thinking": {"type": "disabled"},
+                "thinking": {"type": "enabled"},
             },
             ensure_ascii=False,
         ).encode()
@@ -77,6 +78,9 @@ class MimoClient:
                     finish_reason = choice["finish_reason"]
                     usage = result.get("usage") or {}
                     tool_calls = message.get("tool_calls") or []
+                    reasoning_content = message.get("reasoning_content") or ""
+                    if not isinstance(reasoning_content, str):
+                        raise ValueError("invalid reasoning content")
                     if finish_reason == "tool_calls" and tool_calls:
                         calls = []
                         for index, part in enumerate(tool_calls):
@@ -107,6 +111,7 @@ class MimoClient:
                         raise ValueError("invalid finish reason")
                     yield ChatDelta(
                         content=content,
+                        reasoning_content=reasoning_content,
                         tool_calls=calls,
                         input_tokens=int(usage.get("prompt_tokens", 0)),
                         output_tokens=int(usage.get("completion_tokens", 0)),

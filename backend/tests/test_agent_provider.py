@@ -60,7 +60,7 @@ def test_mimo_client_reads_complete_answer_and_keeps_api_key_in_header(monkeypat
     assert request_body["model"] == "mimo-v2.6-flash"
     assert request_body["max_completion_tokens"] == 8
     assert request_body["stream"] is False
-    assert request_body["thinking"] == {"type": "disabled"}
+    assert request_body["thinking"] == {"type": "enabled"}
 
 
 def test_mimo_client_reads_complete_tool_call_without_leaking_markup(monkeypatch) -> None:
@@ -74,6 +74,7 @@ def test_mimo_client_reads_complete_tool_call_without_leaking_markup(monkeypatch
                             "finish_reason": "tool_calls",
                             "message": {
                                 "content": '<tool_call><function=search_tasks>{"keyword":null}</tool_call>',
+                                "reasoning_content": "Need to query tasks first.",
                                 "tool_calls": [
                                     {
                                         "id": "call-1",
@@ -105,6 +106,7 @@ def test_mimo_client_reads_complete_tool_call_without_leaking_markup(monkeypatch
     assert json.loads(seen["request"].data)["stream"] is False
     assert len(chunks) == 1
     assert chunks[0].content == ""
+    assert chunks[0].reasoning_content == "Need to query tasks first."
     assert chunks[0].tool_calls[0].name == "search_tasks"
     assert chunks[0].tool_calls[0].arguments == '{"keyword":null}'
 
