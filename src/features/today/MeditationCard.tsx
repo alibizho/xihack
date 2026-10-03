@@ -80,12 +80,12 @@ export function MeditationCard() {
   const clock = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
 
   return <section className="meditation-panel" aria-labelledby="meditation-title">
-    <div className="meditation-heading"><span className="meditation-mark" aria-hidden="true" /><div><h2 id="meditation-title">{t("meditationTitle")}</h2><p>{t("meditationIntro")}</p></div></div>
-    <div className="meditation-controls">
-      <div className="meditation-durations" role="group" aria-label={t("meditationDuration")}>{durations.map((value) => <button key={value} type="button" aria-pressed={minutes === value} disabled={running} onClick={() => selectDuration(value)}>{value} {t("meditationMinuteShort")}</button>)}</div>
-      <div className="meditation-timer"><span role="timer" aria-label={t("meditationTimeRemaining")}>{clock}</span><div className="meditation-actions"><button type="button" className="button button-primary" onClick={toggleTimer}><Icon name={running ? "pause" : "play"} size={17} />{running ? t("meditationPause") : t("meditationStart")}</button><button type="button" className="button button-outline" onClick={() => { setRunning(false); setRemaining(minutes * 60); }}>{t("meditationReset")}</button></div></div>
+    <div className="meditation-heading"><div><h2 id="meditation-title">{t("meditationTitle")}</h2><p>{t("meditationIntro")}</p></div><label className="meditation-duration"><span className="sr-only">{t("meditationDuration")}</span><select value={minutes} disabled={running} onChange={(event) => selectDuration(Number(event.target.value))}>{durations.map((value) => <option key={value} value={value}>{value} {t("meditationMinuteShort")}</option>)}</select></label></div>
+    <div className="meditation-center">
+      <span className="meditation-clock" role="timer" aria-label={t("meditationTimeRemaining")}>{clock}</span>
       {remaining === 0 && <p className="meditation-complete" role="status">{t("meditationComplete")}</p>}
+      <div className="meditation-actions"><button type="button" className="button button-primary" onClick={toggleTimer}><Icon name={running ? "pause" : "play"} size={17} />{running ? t("meditationPause") : t("meditationStart")}</button>{(running || remaining !== minutes * 60) && <button type="button" className="meditation-reset" onClick={() => { setRunning(false); setRemaining(minutes * 60); }}>{t("meditationReset")}</button>}</div>
     </div>
-    <div className="meditation-music"><div><Icon name="music" size={19} /><span><strong>{t("meditationMusic")}</strong><small>{t("meditationMusicHint")}</small></span></div><button type="button" aria-pressed={musicPlaying} onClick={toggleMusic}>{musicPlaying ? t("meditationMusicStop") : t("meditationMusicPlay")}</button>{musicError && <p role="alert">{t("meditationMusicError")}</p>}</div>
+    <div className="meditation-footer"><button type="button" className="meditation-music" aria-pressed={musicPlaying} onClick={toggleMusic}><Icon name="music" size={18} />{musicPlaying ? t("meditationMusicStop") : t("meditationMusicPlay")}</button>{musicError && <p role="alert">{t("meditationMusicError")}</p>}</div>
   </section>;
 }
