@@ -80,7 +80,8 @@ const zh = {
   reportSavedPending: "报告已保存，分析尚未完成。", reportSavedUnavailable: "报告已保存，分析暂时不可用。",
   retryAnalysis: "重试分析", analyzing: "正在分析…", summaryLabel: "完成情况", blockerLabel: "遇到的阻碍", nextStepLabel: "下次可试",
   // training
-  trainingKicker: "专注训练 / 5 × 5", countFrom1to25: "从 1 数到 25", pickDifficulty: "选一个难度，按顺序点击数字。",
+  trainingKicker: "专注训练", countFrom1to25: "从 1 数到 25", pickDifficulty: "选布局和难度，按顺序点击数字。",
+  gridVariant: "方格", circleVariant: "圆环", variantAria: "训练布局", circleBoardAria: "圆环数字训练",
   modeBeginner: "入门", modeBeginnerDetail: "提示下一个数字，点过的格子变色", modeNormal: "普通", modeNormalDetail: "没有数字提示，点过的格子变色",
   modeAdvanced: "进阶", modeAdvancedDetail: "没有提示，点过的格子保持原样",
   secondShort: " 秒", nextNumber: "下一个：{n}", doneCount: "已完成 {n} / 25",
@@ -179,7 +180,8 @@ const en: Record<Key, string> = {
   reportSavedPending: "Saved; analysis still pending.", reportSavedUnavailable: "Saved; analysis unavailable.",
   retryAnalysis: "Retry", analyzing: "Analyzing…", summaryLabel: "Outcome", blockerLabel: "Blocker", nextStepLabel: "Try next time",
   // training
-  trainingKicker: "Focus training / 5 × 5", countFrom1to25: "Count from 1 to 25", pickDifficulty: "Pick a difficulty and tap the numbers in order.",
+  trainingKicker: "Focus training", countFrom1to25: "Count from 1 to 25", pickDifficulty: "Pick a layout and difficulty, then tap the numbers in order.",
+  gridVariant: "Grid", circleVariant: "Circle", variantAria: "Training layout", circleBoardAria: "Circular number training",
   modeBeginner: "Beginner", modeBeginnerDetail: "Hints next number; tapped cells dim", modeNormal: "Normal", modeNormalDetail: "No hints; tapped cells dim",
   modeAdvanced: "Advanced", modeAdvancedDetail: "No hints; tapped cells unchanged",
   secondShort: " s", nextNumber: "Next: {n}", doneCount: "{n} / 25 done",

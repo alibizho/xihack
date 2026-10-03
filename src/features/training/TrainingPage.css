@@ -3,11 +3,13 @@
 .training-intro .section-kicker { color: #fffdf5; }
 .training-intro h1 { margin: 12px 0 8px; font-size: clamp(31px, 5vw, 44px); color: #fffdf5; }
 .training-intro p { margin: 0; color: #fffdf5; font-size: 13px; }
-.difficulty-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border: 1px solid #dce6e5; border-radius: 12px; background: var(--paper); }
-.difficulty-picker button { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
-.difficulty-picker button:hover:not(:disabled) { background: #edf2f2; }
-.difficulty-picker button.selected { background: #dcebf0; color: var(--blue-dark); box-shadow: 0 1px 4px #28495a24; }
-.difficulty-picker button:disabled { cursor: default; }
+.variant-picker, .difficulty-picker { display: grid; gap: 4px; padding: 4px; border: 1px solid #dce6e5; border-radius: 12px; background: var(--paper); }
+.variant-picker { grid-template-columns: repeat(2, 1fr); margin-bottom: 10px; }
+.difficulty-picker { grid-template-columns: repeat(3, 1fr); }
+.variant-picker button, .difficulty-picker button { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
+.variant-picker button:hover:not(:disabled), .difficulty-picker button:hover:not(:disabled) { background: #edf2f2; }
+.variant-picker button.selected, .difficulty-picker button.selected { background: #dcebf0; color: var(--blue-dark); box-shadow: 0 1px 4px #28495a24; }
+.variant-picker button:disabled, .difficulty-picker button:disabled { cursor: default; }
 .difficulty-detail { min-height: 20px; margin: 8px 3px 16px; color: #fffdf5; font-size: 12px; line-height: 1.5; }
 .training-surface { padding: 20px; border: 1px solid #e9ece7; border-radius: 14px; background: var(--paper); box-shadow: 0 12px 32px #28495a25; }
 .training-bar { max-width: 490px; min-height: 42px; margin: 0 auto 15px; display: flex; align-items: center; justify-content: space-between; color: var(--blue-dark); font-size: 14px; }
@@ -15,6 +17,24 @@
 .board-wrap { position: relative; width: min(100%, 490px); margin: auto; }
 .training-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; aspect-ratio: 1; }
 .training-board.is-hidden { visibility: hidden; }
+.circular-board { display: block; width: 100%; aspect-ratio: 1; overflow: visible; }
+.circular-board.is-hidden { visibility: hidden; }
+.circular-segment { cursor: pointer; }
+.circular-segment[aria-disabled="true"] { cursor: default; }
+.circular-segment path { stroke: #fffdf8; stroke-width: 4; stroke-linejoin: round; transition: fill .18s ease, stroke .18s ease; }
+.circular-segment text { fill: #17272c; font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; pointer-events: none; }
+.circular-segment.mint path { fill: #abcbbd; }
+.circular-segment.peach path { fill: #edbea9; }
+.circular-segment.lilac path { fill: #c5bad4; }
+.circular-segment.yellow path { fill: #f0d591; }
+.circular-segment.blue path { fill: #a9c8dc; }
+.circular-segment:not([aria-disabled="true"]):hover path { filter: brightness(.95); }
+.circular-segment.next path, .circular-segment:focus-visible path { stroke: #2f5268; stroke-width: 6; }
+.circular-segment.done path { fill: #dce8e7; }
+.circular-segment.done text { fill: #586f79; }
+.circular-hub { fill: #f8f7ef; stroke: #fffdf8; stroke-width: 4; }
+.circular-crosshair { fill: none; stroke: #b4c3c2; stroke-width: 1.5; }
+.circular-dot { fill: #4d646b; }
 .training-cell { border: 1px solid #c9d7dc; border-radius: 7px; background: #edf2f3; color: #264152; font-size: clamp(17px, 4vw, 27px); font-weight: 600; font-variant-numeric: tabular-nums; transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease; }
 .training-cell:hover:not(:disabled) { transform: scale(1.04); background: #dfecef; }
 .training-cell:active:not(:disabled) { transform: scale(.97); }
