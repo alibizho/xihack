@@ -24,12 +24,10 @@
 .voice-capture .voice-chat-messages { width: 100%; max-height: 210px; min-height: 60px; margin-top: 15px; }
 .voice-capture-form { width: 100%; }
 .voice-capture-form .field-label { margin: 14px 0 7px; }
-.voice-capture-form select { border-radius: 12px; }
 .voice-capture-form textarea { width: 100%; min-height: 82px; padding: 12px 15px; resize: vertical; border: 1px solid #d4e1e1; border-radius: 14px; background: white; color: var(--ink); font: inherit; line-height: 1.5; }
 .voice-capture-form textarea:focus { outline: 2px solid #66879b; outline-offset: -2px; }
 .voice-capture-form .button { border-radius: 12px; min-height: 48px; }
 .voice-capture .composer-footnote { margin-top: 11px; }
-.voice-capture .voice-chat-note .button { min-height: 44px; margin-top: 10px; border-radius: 12px; }
 .quick-capture { width: min(100%, 480px); min-height: 50px; display: flex; align-items: center; gap: 8px; border: 1px solid #d4e1e1; border-radius: 40px; background: #fff; box-shadow: 0 5px 20px #9bacb12b; padding: 3px 5px 3px 18px; }
 .quick-capture:focus-within { outline: 2px solid #66879b; }
 .quick-capture input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }

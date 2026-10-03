@@ -6,7 +6,6 @@ import "./TaskComposer.css";
 
 type Recognition = {
   lang: string;
-  processLocally: boolean;
   continuous: boolean;
   interimResults: boolean;
   onresult: ((event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
@@ -18,8 +17,6 @@ type Recognition = {
 };
 type RecognitionClass = {
   new (): Recognition;
-  available?: (options: { langs: string[]; processLocally: true }) => Promise<string>;
-  install?: (options: { langs: string[]; processLocally: true }) => Promise<boolean>;
 };
 type Message = { role: "user" | "assistant"; text: string };
 
@@ -54,7 +51,6 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
   const recognitionBase = useRef("");
   const lastFinalText = useRef("");
   const sendOnEnd = useRef(false);
-  const browserServiceEnabled = useRef(false);
   const openedFromButton = useRef(false);
   const confirmKeys = useRef(new Map<string, string>());
   const [input, setInput] = useState("");
@@ -66,8 +62,6 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
   const [calibrating, setCalibrating] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [listening, setListening] = useState(false);
-  const [browserChoice, setBrowserChoice] = useState(false);
-  const [language, setLanguage] = useState(() => navigator.language.toLowerCase().startsWith("en") ? "en-US" : "zh-CN");
 
   useEffect(() => {
     if (!expanded) return;
@@ -79,7 +73,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       inputRef.current = initialText;
       setInput(initialText);
       void send();
-    } else if (!fromButton) void record(session, browserServiceEnabled.current);
+    } else if (!fromButton) record(session);
     const stop = () => { if (document.hidden) { keepListening.current = false; sendOnEnd.current = false; recognition.current?.stop(); } };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     document.addEventListener("visibilitychange", stop);
@@ -125,11 +119,11 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     openedFromButton.current = true;
     const session = ++sessionId.current;
     onOpen();
-    void record(session, browserServiceEnabled.current);
+    record(session);
   }
 
   function toggleRecord() {
-    if (!keepListening.current) { void record(sessionId.current, browserServiceEnabled.current); return; }
+    if (!keepListening.current) { record(sessionId.current); return; }
     keepListening.current = false;
     sendOnEnd.current = true;
     setPreparing(true);
@@ -137,7 +131,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     else { sendOnEnd.current = false; setPreparing(false); void calibrationTask.current.then(() => send()); }
   }
 
-  async function record(session = sessionId.current, useBrowserService = false) {
+  function record(session = sessionId.current) {
     if (recognition.current) return;
     const SpeechRecognition = speechRecognition();
     if (!SpeechRecognition) { setError("此浏览器不支持语音识别，请改用文字输入"); return; }
@@ -145,13 +139,9 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     setError("");
     let started = false;
     try {
-      if (!useBrowserService) {
-        if (!SpeechRecognition.available || !SpeechRecognition.install) { setBrowserChoice(true); return; }
-      }
       if (!active.current || session !== sessionId.current) return;
       const next = new SpeechRecognition();
-      next.lang = language;
-      if (!useBrowserService) next.processLocally = true;
+      next.lang = "zh-CN";
       next.continuous = true;
       next.interimResults = true;
       recognitionBase.current = inputRef.current.trim() ? `${inputRef.current.trim()} ` : "";
@@ -181,10 +171,10 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       next.onerror = (event) => {
         if (!active.current || session !== sessionId.current) return;
         setPreparing(false);
-        if (event.error === "no-speech" || (event.error === "aborted" && !keepListening.current)) return;
+        if (event.error === "aborted" && !keepListening.current) return;
         keepListening.current = false;
-        if (!useBrowserService && (event.error === "language-not-supported" || event.error === "service-not-allowed")) setBrowserChoice(true);
-        else if (active.current) setError(event.error === "not-allowed" ? "请允许麦克风权限，或改用文字输入" : "识别失败，请重试或改用文字输入");
+        sendOnEnd.current = false;
+        setError(event.error === "not-allowed" ? "请允许麦克风权限，或改用文字输入" : event.error === "no-speech" ? "没听到声音，请点按麦克风重试" : event.error === "network" ? "语音服务暂时无法连接，请重试或改用文字输入" : "识别失败，请重试或改用文字输入");
       };
       next.onend = () => {
         if (!active.current || session !== sessionId.current) return;
@@ -194,7 +184,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
         if (sendOnEnd.current) {
           sendOnEnd.current = false;
           void calibrationTask.current.then(() => send());
-        } else if (keepListening.current && !document.hidden) window.setTimeout(() => { if (active.current && session === sessionId.current && keepListening.current && !recognition.current) void record(session, useBrowserService); }, 150);
+        } else if (keepListening.current && !document.hidden) window.setTimeout(() => { if (active.current && session === sessionId.current && keepListening.current && !recognition.current) record(session); }, 150);
       };
       recognition.current = next;
       next.start();
@@ -283,8 +273,6 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       <strong id="capture-title">{expanded ? preparing ? "正在开启麦克风…" : listening || keepListening.current ? "正在聆听 · 点按结束" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
-    {browserChoice && <div className="voice-chat-note" role="status"><p>本地语音识别不可用。浏览器语音识别可能将音频发送给浏览器服务商处理。</p><button type="button" className="button button-primary" onClick={() => { browserServiceEnabled.current = true; setBrowserChoice(false); void record(); }}>使用浏览器语音识别</button></div>}
-    {browserServiceEnabled.current && !browserChoice && <p className="voice-chat-note">正在使用浏览器语音识别，音频可能由浏览器服务商处理。</p>}
     {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
       {proposals.map((proposal, index) => {
@@ -306,8 +294,6 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       <div ref={messageEnd} />
     </div>}
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-    <label className="field-label" htmlFor="voice-language">识别语言</label>
-    <select id="voice-language" className="form-input" value={language} disabled={keepListening.current || preparing || busy} onChange={(event) => setLanguage(event.target.value)}><option value="zh-CN">中文</option><option value="en-US">English</option></select>
     <label className="field-label" htmlFor="voice-input">对话内容（可修改）</label>
     <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { calibrationId.current++; setCalibrating(false); inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder="说出或输入你想问的事" />
     {clarification && <p className="voice-chat-note" role="status">{clarification}</p>}
