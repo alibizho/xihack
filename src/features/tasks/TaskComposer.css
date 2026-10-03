@@ -21,6 +21,7 @@
 .voice-chat-bubble.assistant a { color: #176375; text-decoration: underline; text-underline-offset: 2px; }
 .voice-run-progress { align-self: flex-start; margin: 0; padding: 3px 4px; color: #617680; font-size: 12px; line-height: 1.45; }
 .voice-proposal-batch { width: 100%; display: grid; gap: 8px; padding: 10px; border: 1px solid #9eb9b3; border-radius: 10px; background: #eaf1ec; }
+.voice-proposal-batch-area { display: grid; gap: 10px; width: 100%; }
 .voice-proposal-batch-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px; color: var(--blue-dark); }
 .voice-proposal-batch-head span { font-size: 12px; }
 .voice-proposal-batch .voice-proposal { border-radius: 8px; min-width: 0; }

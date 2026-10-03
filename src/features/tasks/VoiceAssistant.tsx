@@ -22,6 +22,7 @@ function mergeProposals(current: Proposal[], incoming: Proposal[]) {
 export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; guestQuota?: GuestQuota; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
   const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
+  const proposalBatchEnd = useRef<HTMLDivElement>(null);
   const capture = useRef<AudioCapture | null>(null);
   const lastAudio = useRef<{ wav: Blob; prefix: string } | null>(null);
   const recordingTimer = useRef<number | null>(null);
@@ -112,6 +113,13 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
   function close() { orbButton.current?.focus(); onClose(); }
 
   useEffect(() => { messageEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages, input, busy]);
+  useEffect(() => {
+    if (!proposalBatches.length) return;
+    proposalBatchEnd.current?.scrollIntoView({
+      block: "nearest",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }, [proposalBatches.length]);
 
   function openAndRecord() {
     active.current = true;
@@ -410,14 +418,17 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
     {!preparing && lastAudio.current && input && <button className="voice-chat-note voice-enhance" type="button" onClick={() => void retryEnhancedTranscription()}>{t("enhancedRecognition")}</button>}
-    {(messages.length > 0 || proposals.length > 0 || proposalBatches.length > 0 || progress || liveAnswer) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
+    {(messages.length > 0 || progress || liveAnswer) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => message.role === "assistant"
         ? <div key={index} className="voice-chat-bubble assistant"><Markdown>{message.text}</Markdown></div>
         : <p key={index} className="voice-chat-bubble user">{message.text}</p>)}
       {liveAnswer && <div className="voice-chat-bubble assistant"><Markdown>{liveAnswer}</Markdown></div>}
       {progress && <p className="voice-run-progress" role="status">{progress}</p>}
-      <ProposalBatchReview batches={proposalBatches} onChange={(batch) => setProposalBatches((current) => current.map((item) => item.batch_id === batch.batch_id ? batch : item))} onTasksChanged={onTasksChanged} disabled={busy} />
       <div ref={messageEnd} />
+    </div>}
+    {proposalBatches.length > 0 && <div className="voice-proposal-batch-area" aria-label={t("batchHeading")}>
+      <ProposalBatchReview batches={proposalBatches} onChange={(batch) => setProposalBatches((current) => current.map((item) => item.batch_id === batch.batch_id ? batch : item))} onTasksChanged={onTasksChanged} disabled={busy} />
+      <div ref={proposalBatchEnd} />
     </div>}
     <ProposalCarousel proposals={proposals} busy={busy} focusProposalId={proposalFocusId} onDecide={(proposal, accept) => void decide(proposal, accept)} />
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
