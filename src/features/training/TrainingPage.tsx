@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { priorityScore, type Task } from "../tasks/mockTasks";
 import { cellFeedback, shuffledBoard, shuffledColors, type Difficulty } from "./trainingGame";
 import { circularRingSizes, circularSegments, ringRotation } from "./circularBoard";
+import { requestTrainingFeedback, type TrainingFeedback } from "./trainingFeedback";
+import { getRoundInsight } from "./trainingInsight";
 import { Icon } from "../../shared/Icon";
 import { fill, t, uiLocale } from "../../shared/i18n.ts";
 import "./TrainingPage.css";
 
 type Variant = "grid" | "circle";
-type Round = { id: string; difficulty: Difficulty; variant?: Variant; seconds: number; mistakes: number; taps: number[]; completedAt: string };
+type Round = { id: string; difficulty: Difficulty; variant?: Variant; seconds: number; mistakes: number; taps: number[]; completedAt: string; feedback?: TrainingFeedback };
 const variants: { id: Variant; name: () => string }[] = [
   { id: "grid", name: () => t("gridVariant") },
   { id: "circle", name: () => t("circleVariant") },
@@ -160,6 +162,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     setTaps(nextTaps);
     setElapsed(seconds);
     if (target === 25) {
+      completed.current = true;
       const round = { id: crypto.randomUUID(), difficulty, variant, seconds, mistakes, taps: nextTaps, completedAt: new Date().toISOString() };
       setRounds((current) => [round, ...current].slice(0, 20));
       setPhase("finished");
@@ -195,7 +198,31 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
       {(phase === "idle" || phase === "interrupted" || phase === "finished") && <button className="button button-primary training-start" onClick={start}><Icon name="play" size={18} /> {phase === "idle" ? t("startTraining") : t("playAgain")}</button>}
       {phase === "interrupted" && <p className="training-message">{t("interruptedNote")}</p>}
     </section>
-    {phase === "finished" && last && <section className="training-result" aria-live="polite"><span className="section-kicker">{t("roundResult")} · {variantName(last.variant)} · {modes.find((mode) => mode.id === last.difficulty)?.name()}</span><h2>{formatTime(last.seconds)}</h2><p>{fill("mistakesSlowest", { n: last.mistakes, step: slowest === 1 ? t("findingFirst") : fill("nextStepAria", { a: slowest - 1, b: slowest }) })}</p>{nextTask && <button onClick={navigate}>{t("nextUpLabel")}{nextTask.title} <Icon name="arrow" size={17} /></button>}</section>}
-    {rounds.length > 0 && <details className="round-history"><summary>{t("trainingHistory")} <span>{fill("roundsCount", { n: rounds.length })}</span></summary><ol>{rounds.map((round) => <li key={round.id}><span>{variantName(round.variant)} · {modes.find((mode) => mode.id === round.difficulty)?.name()}</span><strong>{formatTime(round.seconds)}</strong><small>{fill("mistakesCount", { n: round.mistakes })}</small></li>)}</ol></details>}
+    {phase === "finished" && last && <section className="training-result" ref={resultWrap} aria-live="polite">
+      <span className="section-kicker">{t("roundResult")} · {variantName(last.variant)} · {modes.find((mode) => mode.id === last.difficulty)?.name()}</span>
+      <h2>{formatTime(last.seconds)}</h2>
+      <p>{fill("mistakesSlowest", { n: last.mistakes, step: slowest === 1 ? t("findingFirst") : fill("nextStepAria", { a: slowest - 1, b: slowest }) })}</p>
+      <div className="training-feedback">
+        <div className="training-feedback-title"><h3>{t("reviewFocus")}</h3><span>{t("reviewProvider")}</span></div>
+        {last.feedback ? <RoundFeedback round={{ ...last, feedback: last.feedback }} />
+          : feedbackState?.roundId === last.id && feedbackState.status === "loading" ? <p role="status">{t("reviewLoading")}</p>
+          : <div className="training-feedback-error"><p>{feedbackState?.roundId === last.id ? feedbackState.message : t("reviewMissing")}</p><button type="button" onClick={() => void analyze(last)}>{t("reviewRetry")}</button></div>}
+        <small>{t("reviewPrivacy")}</small>
+      </div>
+      {nextTask && <button onClick={navigate}>{t("nextUpLabel")}{nextTask.title} <Icon name="arrow" size={17} /></button>}
+    </section>}
+    {rounds.length > 0 && <section className="round-history" aria-label={t("trainingHistory")}>
+      <div className="round-history-heading"><h2>{t("trainingHistory")}</h2><span>{fill("reviewsCount", { rounds: rounds.length, reviews: rounds.filter((round) => round.feedback).length })}</span></div>
+      <ol>{rounds.map((round) => <li key={round.id}>
+        {round.feedback ? <details className="round-history-item">
+          <summary><span className="round-history-date">{formatDate(round.completedAt)}</span><span className="round-history-mode">{variantName(round.variant)} · {modes.find((mode) => mode.id === round.difficulty)?.name()}</span><strong>{formatTime(round.seconds)}</strong><span className="round-history-review">{t("reviewSee")}</span><Icon name="chevronDown" size={18} /></summary>
+          <div className="round-history-detail"><p className="round-history-mistakes">{fill("mistakesCount", { n: round.mistakes })}</p><RoundFeedback round={{ ...round, feedback: round.feedback }} /></div>
+        </details> : <div className="round-history-item round-history-plain">
+          <div className="round-history-summary"><span className="round-history-date">{formatDate(round.completedAt)}</span><span className="round-history-mode">{variantName(round.variant)} · {modes.find((mode) => mode.id === round.difficulty)?.name()}</span><strong>{formatTime(round.seconds)}</strong><span className="round-history-mistakes">{fill("mistakesCount", { n: round.mistakes })}</span></div>
+          <button type="button" disabled={feedbackState?.status === "loading" || pendingReviews.has(round.id)} onClick={() => void analyze(round)}>{pendingReviews.has(round.id) ? t("generating") : t("reviewGenerate")}</button>
+          {feedbackState?.roundId === round.id && feedbackState.status === "error" && <p role="status" className="round-history-error">{feedbackState.message}</p>}
+        </div>}
+      </li>)}</ol>
+    </section>}
   </div>;
 }
