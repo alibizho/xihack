@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { login, register } from "./authApi";
+import { GUEST_AI_CALLS, registerGuest } from "./guest";
 import "./ProfilePage.css";
 
 type Props = {
@@ -15,7 +16,16 @@ export function AuthPage({ onAuthenticated, connectionError, onRetry }: Props) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [adult, setAdult] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [guestBusy, setGuestBusy] = useState(false);
   const [error, setError] = useState("");
+
+  async function enterAsGuest() {
+    setGuestBusy(true);
+    setError("");
+    try { onAuthenticated(await registerGuest()); }
+    catch (reason) { setError((reason as Error).message); }
+    finally { setGuestBusy(false); }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -55,6 +65,10 @@ export function AuthPage({ onAuthenticated, connectionError, onRetry }: Props) {
       <button className="auth-switch" type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>
         {mode === "login" ? "没有账号？注册" : "已有账号？登录"}
       </button>
+      <button className="auth-guest" type="button" onClick={enterAsGuest} disabled={busy || guestBusy}>
+        {guestBusy ? "正在创建游客会话…" : "先逛逛 · 游客进入"}
+      </button>
+      <p className="auth-guest-note">游客可手动添加事务、训练和使用 {GUEST_AI_CALLS} 次 AI 助理</p>
     </main>
   </div>;
 }

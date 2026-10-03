@@ -35,7 +35,9 @@ function speechRecognition(): RecognitionClass | undefined {
   return browser.SpeechRecognition || browser.webkitSpeechRecognition;
 }
 
-export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
+export type GuestQuota = { left: number; spend: () => boolean };
+
+export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; guestQuota?: GuestQuota; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
   const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const recognition = useRef<Recognition | null>(null);
@@ -201,6 +203,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     const content = inputRef.current.trim();
     if (!content) { setError("请先说出或输入内容"); return; }
     if (content.length > 8000) { setError("内容不能超过 8000 字"); return; }
+    if (guestQuota && guestQuota.left <= 0) { setError("游客 AI 次数已用完。在“我的”退出后注册正式账号即可继续使用。"); return; }
     setBusy(true);
     setError("");
     calibrationId.current++;
@@ -215,6 +218,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       if (pendingMessage.current.content !== content) pendingMessage.current = { content, payload: withLocalContext(content), id: crypto.randomUUID(), shown: false };
       const { run_id } = await sendMessage(conversationId.current, pendingMessage.current.payload, pendingMessage.current.id, token);
       if (session !== sessionId.current) return;
+      if (guestQuota) guestQuota.spend();
       if (!pendingMessage.current.shown) {
         setMessages((current) => [...current, { role: "user", text: content }]);
         pendingMessage.current.shown = true;
@@ -300,7 +304,9 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     {error && <p className="field-error" role="alert">{error}</p>}
     <button className="button button-primary full-width" type="submit" disabled={busy || listening || preparing || calibrating || !input.trim()}>{busy ? "正在处理…" : "发送给助理"}</button>
     </form>
-    <p className="composer-footnote">事务变更仍需逐项确认。也可以问「我该先做哪件事？」</p>
+    {guestQuota
+      ? <p className="composer-footnote">游客模式 · AI 助理剩余 {guestQuota.left} 次；手动添加事务不受限制。</p>
+      : <p className="composer-footnote">事务变更仍需逐项确认。也可以问「我该先做哪件事？」</p>}
     </div></div>
   </div>;
 }

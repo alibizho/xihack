@@ -8,6 +8,7 @@ import { TrainingPage } from "./features/training/TrainingPage";
 import { AuthPage } from "./features/profile/AuthPage";
 import { ProfilePage } from "./features/profile/ProfilePage";
 import { currentUser } from "./features/profile/authApi";
+import { guestCallsLeft, isGuest, spendGuestCall } from "./features/profile/guest";
 import { ApiRequestError } from "./shared/api.ts";
 import { csrf, listTasks, proposeComplete, proposeCreate, proposeUpdate, type Proposal, type ServerTask } from "./features/tasks/agentApi";
 import { displayTask, taskInput } from "./features/tasks/serverTasks";
@@ -15,7 +16,7 @@ import { TaskProposalDialog } from "./features/tasks/TaskProposalDialog";
 import { TaskReportDialog } from "./features/tasks/TaskReportDialog";
 
 type Page = "today" | "tasks" | "training" | "profile";
-type Draft = { text?: string; edit?: Task };
+type Draft = { edit?: Task };
 export type Capture = { id: string; input: string; title: string; time: string; edited: boolean };
 const pages: Page[] = ["today", "tasks", "training", "profile"];
 const labels: Record<Page, string> = { today: "今天", tasks: "事务", training: "训练", profile: "我的" };
@@ -58,6 +59,15 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
   const [draft, setDraft] = useState<Draft | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceText, setVoiceText] = useState("");
+  const guest = isGuest(username);
+  const [guestLeft, setGuestLeft] = useState(() => guest ? guestCallsLeft(username) : null);
+  function spendCall(): boolean {
+    // ponytail: non-guests skip the quota entirely; server-side limits stay authoritative.
+    if (!guest) return true;
+    const ok = spendGuestCall(username);
+    setGuestLeft(guestCallsLeft(username));
+    return ok;
+  }
   const [history] = useState<Capture[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(historyStorageKey) || "[]");
@@ -100,7 +110,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
     if (!task) return;
     void csrf().then((token) => proposeUpdate(task, { [axis]: value }, token)).then(setPendingProposal).catch((reason) => setTaskError((reason as Error).message));
   }
-  async function save(task: TaskDraft, _sourceText: string) {
+  async function save(task: TaskDraft) {
     const current = draft?.edit && serverTasks.find((item) => item.task_id === draft.edit?.id);
     const input = taskInput(task);
     const { description: _description, ...changes } = input;
@@ -121,10 +131,10 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
         </header>
         <main id="main" className={`content ${page === "training" ? "training-content" : ""}`}>
           {taskError && <p className="field-error" role="alert">{taskError}</p>}
-          {page === "today" && <TodayPage tasks={visibleTasks} history={history} navigate={navigate} voiceOpen={voiceOpen} voiceText={voiceText} openVoice={openVoice} openTextChat={openTextChat} closeVoice={() => setVoiceOpen(false)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} onTaskCompleted={openReport} />}
+          {page === "today" && <TodayPage tasks={visibleTasks} history={history} navigate={navigate} voiceOpen={voiceOpen} voiceText={voiceText} openVoice={openVoice} openTextChat={openTextChat} closeVoice={() => setVoiceOpen(false)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} onTaskCompleted={openReport} guestQuota={guest ? { left: guestLeft ?? 0, spend: spendCall } : undefined} />}
           {page === "tasks" && <TasksPage key={taskViewKey} serverMode tasks={visibleTasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => voice ? openVoice() : setDraft({})} editTask={(task) => setDraft({ edit: task })} openReport={(task) => openReport(task.id)} />}
           {page === "training" && <TrainingPage tasks={visibleTasks} navigate={() => navigate("tasks")} />}
-          {page === "profile" && <ProfilePage username={username} onLoggedOut={onLoggedOut} />}
+          {page === "profile" && <ProfilePage username={username} guestLeft={guestLeft} onLoggedOut={onLoggedOut} />}
         </main>
         <nav className="bottom-nav" aria-label="主导航">
           {pages.map((item) => <button key={item} className={page === item ? "active" : ""} onClick={() => navigate(item)} aria-current={page === item ? "page" : undefined}>
@@ -132,7 +142,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
           </button>)}
         </nav>
       </div>
-      {draft && <TaskComposer key={draft.edit?.id || draft.text || "text"} initialText={draft.text} edit={draft.edit} tasks={visibleTasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
+      {draft && <TaskComposer key={draft.edit?.id || "new"} edit={draft.edit} onClose={() => setDraft(null)} onSave={save} />}
       {pendingProposal && <TaskProposalDialog proposal={pendingProposal} taskTitle={serverTasks.find((task) => task.task_id === pendingProposal.task_id)?.title} onClose={() => setPendingProposal(null)} onConfirmed={() => void refreshTasks()} onCompleted={(id, title) => setReportTask({ id, title })} />}
       {reportTask && <TaskReportDialog taskId={reportTask.id} title={reportTask.title} onClose={() => setReportTask(null)} />}
     </div>

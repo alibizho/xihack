@@ -79,35 +79,5 @@ export function normalizeTask(value: Task & { important?: boolean; urgent?: bool
   };
 }
 
-const chineseDigit: Record<string, number> = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
-function dueFromText(text: string, now: Date): string {
-  const date = new Date(now);
-  if (/明天/.test(text)) date.setDate(date.getDate() + 1);
-  else if (/后天/.test(text)) date.setDate(date.getDate() + 2);
-  else if (/下周/.test(text)) date.setDate(date.getDate() + 7);
-  else if (/周[一二三四五六日]/.test(text)) {
-    const weekday = "日一二三四五六".indexOf(text.match(/周([一二三四五六日])/)?.[1] || "");
-    date.setDate(date.getDate() + (weekday - date.getDay() + 7) % 7);
-  } else if (!/今天/.test(text)) return "待安排";
-  const time = text.match(/(上午|下午|晚上)?\s*([一二三四五六七八九十]|\d{1,2})点/);
-  let hour = time ? Number(chineseDigit[time[2]] ?? time[2]) : 0;
-  if (time?.[1] === "下午" || time?.[1] === "晚上") hour = hour < 12 ? hour + 12 : hour;
-  return scheduledDue(localDate(date), time ? `${String(hour).padStart(2, "0")}:00` : "");
-}
+// ponytail: demo text→score heuristic deleted; voice AI interpretation lives in the assistant flow.
 
-// Demo-only scoring. The real interpretation endpoint replaces this heuristic.
-export function mockProposal(text: string, now = new Date()): TaskDraft {
-  const clean = text.trim().replace(/[。！!，,]+$/, "");
-  if (!clean) throw new Error("请先输入一件要做的事");
-  const importance = /不重要/.test(clean) ? 2.4 : /非常重要|特别重要/.test(clean) ? 9.2 : /重要/.test(clean) ? 7.8 : /项目|考试|展示|报告/.test(clean) ? 7.1 : /牙医|体检|客户/.test(clean) ? 6.7 : 5.0;
-  const urgency = /不着急|不急/.test(clean) ? 2.6 : /马上|立刻|尽快/.test(clean) ? 9.4 : /今天/.test(clean) ? 9.0 : /明天/.test(clean) ? 8.0 : /后天/.test(clean) ? 6.8 : /周[一二三四五六日]|下周/.test(clean) ? 6.2 : 3.0;
-  return {
-    title: clean.replace(/^(记得|提醒我|请帮我)/, "").replace(/[，,].*$/, ""),
-    due: dueFromText(clean, now),
-    category: /牙医|买|妈妈|体检/.test(clean) ? "生活" : "学习",
-    importance,
-    urgency,
-    importanceReason: importance === 5 ? "没有明确的影响信息，暂用中间值" : /重要/.test(clean) ? "根据你对重要性的表述" : "根据事项类型估计",
-    urgencyReason: /不着急|不急/.test(clean) ? "你说了不着急" : /今天|明天|后天|周|马上|立刻|尽快/.test(clean) ? "根据时间或紧急表达估计" : "没有截止时间，暂按较低紧急度",
-  };
-}
