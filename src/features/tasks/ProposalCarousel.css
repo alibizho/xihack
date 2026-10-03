@@ -1,6 +1,7 @@
 .voice-proposal-area { padding: 12px 0 6px; }
 .voice-proposal-stage { display: grid; grid-template-columns: 44px minmax(0, 560px) 44px; align-items: center; justify-content: center; gap: 10px; }
 .voice-proposal { width: 100%; min-width: 0; padding: 18px 20px; border: 1px solid #b8cbd0; background: #f4f8f5; color: var(--ink); animation: proposal-enter .18s ease-out both; }
+.voice-proposal-stage > .voice-proposal { grid-column: 2; }
 .voice-proposal-kind { color: var(--blue-dark); font-size: 12px; font-weight: 700; }
 .voice-proposal-title { margin: 7px 0 9px; font-size: 18px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
 .voice-proposal-description { margin: 6px 0 10px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
