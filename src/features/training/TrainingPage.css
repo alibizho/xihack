@@ -20,7 +20,7 @@
 .circular-board { display: block; width: 100%; aspect-ratio: 1; overflow: visible; }
 .circular-board.is-hidden { visibility: hidden; }
 .circular-ring { transform-box: view-box; transform-origin: center; transition: transform .4s ease-in-out; }
-.circular-segment { cursor: pointer; }
+.circular-segment { cursor: pointer; outline: none; }
 .circular-segment[aria-disabled="true"] { cursor: default; }
 .circular-segment path { fill: var(--cell-color); stroke: #fffdf8; stroke-width: 4; stroke-linejoin: round; transition: fill .18s ease, stroke .18s ease; }
 .circular-segment text { fill: #17272c; font-family: inherit; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; transform-box: fill-box; transform-origin: center; transition: transform .4s ease-in-out; }
