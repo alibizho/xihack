@@ -608,6 +608,8 @@ def test_agent_runtime_deduplicates_exact_same_round_tool_calls_with_safe_event(
     progress = [event.payload for event in events if event.event_type == "run.progress"]
     assert any(event.get("phase") == "checking_tasks" for event in progress)
     stream = client.get(f"/api/runs/{accepted['run_id']}/events", headers={"Last-Event-ID": "0"})
+    assert "event: run.progress" in stream.text
+    assert '"phase":"checking_tasks"' in stream.text
     assert "private reasoning" not in stream.text
     assert "search_tasks" not in stream.text
 
@@ -1103,6 +1105,9 @@ def test_model_failure_keeps_user_message_and_has_safe_error_code(client: TestCl
     status = client.get(f"/api/runs/{accepted['run_id']}").json()
     assert status["status"] == "failed"
     assert status["error_code"] == "MODEL_UNAVAILABLE"
+    stream = client.get(f"/api/runs/{accepted['run_id']}/events", headers={"Last-Event-ID": "0"})
+    assert "event: run.failed" in stream.text
+    assert '"error_code":"MODEL_UNAVAILABLE"' in stream.text
     messages = client.get(f"/api/conversations/{conversation['conversation_id']}").json()[
         "messages"
     ]

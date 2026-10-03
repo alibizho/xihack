@@ -8,6 +8,7 @@ import { startAudioCapture, type AudioCapture, type CapturedAudio } from "./audi
 import { browserAsrIsReady, prepareBrowserAsr, transcribeBrowser } from "./speech/browserAsr";
 import { ProposalBatchReview } from "./ProposalBatchReview";
 import { ProposalCarousel } from "./ProposalCarousel";
+import { RunEventCursor } from "./runEventCursor";
 import "./TaskComposer.css";
 
 type Message = { role: "user" | "assistant"; text: string };
@@ -153,28 +154,43 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
 
   function watchRun(runId: string, session: number): Promise<Run> {
     return new Promise((resolve, reject) => {
-      let cursor = 0;
+      const cursor = new RunEventCursor();
       let settled = false;
       let finishing = false;
+      let stream: EventSource | null = null;
+      let ownedReconnectTimer: number | null = null;
+      let cancelWatch: (() => void) | null = null;
+      const isCurrentSession = () => active.current && session === sessionId.current;
       const close = () => {
-        runStream.current?.close();
-        runStream.current = null;
-        if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
-        reconnectTimer.current = null;
+        const ownedStream = stream;
+        stream = null;
+        ownedStream?.close();
+        if (runStream.current === ownedStream) runStream.current = null;
+        if (ownedReconnectTimer !== null) {
+          window.clearTimeout(ownedReconnectTimer);
+          if (reconnectTimer.current === ownedReconnectTimer) reconnectTimer.current = null;
+          ownedReconnectTimer = null;
+        }
       };
       const finish = async () => {
         if (finishing || settled) return;
+        if (!isCurrentSession()) {
+          settled = true;
+          close();
+          reject(new Error("run_watch_cancelled"));
+          return;
+        }
         finishing = true;
         close();
         try {
           const run = await getRun(runId);
-          if (active.current && session === sessionId.current) await loadRunResults(runId, session);
+          if (isCurrentSession()) await loadRunResults(runId, session);
           settled = true;
-          cancelRunWatch.current = null;
+          if (cancelRunWatch.current === cancelWatch) cancelRunWatch.current = null;
           resolve(run);
         } catch (reason) {
           settled = true;
-          cancelRunWatch.current = null;
+          if (cancelRunWatch.current === cancelWatch) cancelRunWatch.current = null;
           reject(reason);
         }
       };
@@ -182,81 +198,89 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       const terminalFromServer = async () => {
         try {
           const run = await getRun(runId);
+          if (!isCurrentSession()) return;
           if (isTerminal(run)) await finish();
           else reconnect();
-        } catch { reconnect(); }
+        } catch {
+          if (isCurrentSession()) reconnect();
+        }
       };
       const connect = () => {
-        if (settled || !active.current || session !== sessionId.current) {
+        if (settled || !isCurrentSession()) {
           settled = true;
           close();
           reject(new Error("run_watch_cancelled"));
           return;
         }
-        const source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events?after=${cursor}`, { withCredentials: true });
+        const source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events?after=${cursor.current}`, { withCredentials: true });
+        stream = source;
         runStream.current = source;
-        const readId = (event: Event) => {
-          const id = Number((event as MessageEvent).lastEventId);
-          if (Number.isInteger(id) && id > cursor) cursor = id;
-        };
         source.addEventListener("run.progress", (event) => {
-          if (!active.current || session !== sessionId.current) return;
-          readId(event);
+          if (!isCurrentSession() || !cursor.accept((event as MessageEvent).lastEventId)) return;
           try {
             const data = JSON.parse((event as MessageEvent).data) as { phase?: string; item_count?: number };
             setProgress(runProgressMessage(data.phase || "", data.item_count));
           } catch { /* Ignore malformed progress payloads. */ }
         });
         source.addEventListener("message.delta", (event) => {
-          if (!active.current || session !== sessionId.current) return;
-          readId(event);
+          if (!isCurrentSession() || !cursor.accept((event as MessageEvent).lastEventId)) return;
           try {
             const text = JSON.parse((event as MessageEvent).data).text;
             if (typeof text === "string") setLiveAnswer((current) => current + text);
           } catch { /* Ignore malformed content events. */ }
         });
         source.addEventListener("run.snapshot", (event) => {
-          if (!active.current || session !== sessionId.current) return;
-          readId(event);
+          if (!isCurrentSession() || !cursor.accept((event as MessageEvent).lastEventId)) return;
           try {
             const data = JSON.parse((event as MessageEvent).data) as { status?: string; last_event_sequence?: number; phase?: string };
-            cursor = Math.max(cursor, data.last_event_sequence || 0);
+            cursor.advanceTo(data.last_event_sequence || 0);
             if (data.phase === "drafts_ready") setProgress(t("runDraftsReady"));
             if (["completed", "failed", "cancelled"].includes(data.status || "")) void finish();
           } catch { /* Ignore malformed snapshots. */ }
         });
         for (const eventName of ["run.completed", "run.failed", "run.cancelled"]) {
-          source.addEventListener(eventName, (event) => { readId(event); void finish(); });
+          source.addEventListener(eventName, (event) => {
+            if (!isCurrentSession() || !cursor.accept((event as MessageEvent).lastEventId)) return;
+            void finish();
+          });
         }
         source.addEventListener("run.status", (event) => {
-          if (!active.current || session !== sessionId.current) return;
-          readId(event);
+          if (!isCurrentSession() || !cursor.accept((event as MessageEvent).lastEventId)) return;
           try {
             const data = JSON.parse((event as MessageEvent).data) as { status?: string };
             if (["completed", "failed", "cancelled"].includes(data.status || "")) void finish();
           } catch { /* Ignore status updates without a known schema. */ }
         });
+        for (const eventName of ["run.started", "run.tool_duplicate"]) {
+          source.addEventListener(eventName, (event) => {
+            if (isCurrentSession()) cursor.accept((event as MessageEvent).lastEventId);
+          });
+        }
         source.onerror = () => {
           source.close();
+          if (stream === source) stream = null;
           if (runStream.current === source) runStream.current = null;
-          if (settled) return;
+          if (settled || !isCurrentSession()) return;
           setProgress(t("runReconnecting"));
           void terminalFromServer();
         };
       };
       const reconnect = () => {
-        if (settled || reconnectTimer.current !== null) return;
-        reconnectTimer.current = window.setTimeout(() => {
-          reconnectTimer.current = null;
+        if (settled || !isCurrentSession() || ownedReconnectTimer !== null) return;
+        ownedReconnectTimer = window.setTimeout(() => {
+          if (reconnectTimer.current === ownedReconnectTimer) reconnectTimer.current = null;
+          ownedReconnectTimer = null;
           connect();
         }, 1500);
+        reconnectTimer.current = ownedReconnectTimer;
       };
-      cancelRunWatch.current = () => {
+      cancelWatch = () => {
         if (settled) return;
         settled = true;
         close();
         reject(new Error("run_watch_cancelled"));
       };
+      cancelRunWatch.current = cancelWatch;
       connect();
     });
   }
