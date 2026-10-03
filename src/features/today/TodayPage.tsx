@@ -5,6 +5,7 @@ import type { Capture } from "../../App";
 import { Icon } from "../../shared/Icon";
 import { fill, t, uiLocale } from "../../shared/i18n.ts";
 import { VoiceAssistant, type GuestQuota } from "../tasks/VoiceAssistant";
+import { MeditationCard } from "./MeditationCard";
 import "./TodayPage.css";
 
 type Props = {
@@ -45,6 +46,7 @@ export function TodayPage({ tasks, history, navigate, voiceOpen, voiceText, open
       <button className="next-task" onClick={() => navigate("tasks", next ? parseDue(next.due).date : undefined)}><span className="shortcut-label">{t("nextTaskLabel")}</span><strong>{next?.title || t("noTasksYet")}</strong><span>{next ? `${t("priorityLabel")} ${priorityScore(next).toFixed(1)} · ${formatDue(next.due)}` : t("addFirstHint")}</span><Icon name="arrow" size={18} /></button>
       <button className="training-shortcut" onClick={() => navigate("training")}><Icon name="focus" size={24} /><strong>{t("trainingShortcut")}</strong><span>{t("countTo25")}</span><Icon name="arrow" size={18} /></button>
     </div>
+    <MeditationCard />
     <details className="history-panel"><summary>{t("localHistory")} <span>{history.length ? fill("recordsCount", { n: history.length }) : t("noneYet")}</span></summary>{history.length ? <ol>{history.map((entry) => <li key={entry.id}><span>{new Intl.DateTimeFormat(uiLocale(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(entry.time))}</span><strong>{entry.title}</strong><small>{entry.edited ? t("editedLabel") : entry.input}</small></li>)}</ol> : <p>{t("noLocalRecords")}</p>}</details>
   </div>;
 }

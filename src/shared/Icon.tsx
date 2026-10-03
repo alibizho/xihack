@@ -11,6 +11,8 @@ export type IconName =
   | "check"
   | "search"
   | "play"
+  | "pause"
+  | "music"
   | "refresh"
   | "user";
 const icons: Record<IconName, ReactNode> = {
@@ -51,6 +53,8 @@ const icons: Record<IconName, ReactNode> = {
     </>
   ),
   play: <path d="m8 5 11 7-11 7V5Z" />,
+  pause: <path d="M8 5v14M16 5v14" />,
+  music: <path d="M9 18V5l11-2v13M9 9l11-2M9 18a3 2 0 1 1-6 0 3 2 0 0 1 6 0Zm11-2a3 2 0 1 1-6 0 3 2 0 0 1 6 0Z" />,
   refresh: (
     <>
       <path d="M20 7v5h-5M4 17v-5h5" />
