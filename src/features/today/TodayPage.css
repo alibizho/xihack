@@ -47,7 +47,9 @@
 .meditation-heading > div { min-width: 0; }
 .meditation-heading h2 { margin: 0 0 5px; color: var(--blue-dark); font-size: 20px; }
 .meditation-heading p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
-.meditation-duration select { min-width: 105px; min-height: 44px; padding: 0 10px; border: 1px solid #d5e1df; border-radius: 9px; background: #fffdf8; color: var(--blue-dark); font-size: 13px; cursor: pointer; }
+.meditation-duration { position: relative; display: inline-flex; align-items: center; flex: none; color: var(--muted); }
+.meditation-duration::after { content: ""; position: absolute; right: 15px; top: 50%; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-65%) rotate(45deg); pointer-events: none; }
+.meditation-duration select { appearance: none; min-width: 105px; min-height: 44px; padding: 0 34px 0 12px; border: 1px solid #d5e1df; border-radius: 9px; background: #fffdf8; color: var(--blue-dark); font-size: 13px; cursor: pointer; }
 .meditation-duration select:focus-visible { outline: 3px solid #d8a16b; outline-offset: 3px; }
 .meditation-duration select:disabled { cursor: default; opacity: .65; }
 .meditation-center { min-height: 196px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
