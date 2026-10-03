@@ -101,11 +101,15 @@ class AgentRunService:
                     raise RunFailure("RUN_LIMIT_REACHED", 429, "Too many active runs")
 
                 self._consume_rate_limits(session, user_id, ip_address, now)
-                if conversation.title == "新对话" and session.scalar(
-                    select(Message.message_id)
-                    .where(Message.conversation_id == conversation_id)
-                    .limit(1)
-                ) is None:
+                if (
+                    conversation.title == "新对话"
+                    and session.scalar(
+                        select(Message.message_id)
+                        .where(Message.conversation_id == conversation_id)
+                        .limit(1)
+                    )
+                    is None
+                ):
                     conversation.title = title_from_first_message(content)
                 message = Message(
                     message_id=str(uuid4()),

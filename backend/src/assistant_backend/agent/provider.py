@@ -147,9 +147,18 @@ class ChatCompletionClient:
                                 if part["type"] != "function":
                                     raise ValueError("unexpected tool type")
                                 function = part["function"]
-                                if not isinstance(function["name"], str) or not isinstance(function["arguments"], str):
+                                if not isinstance(function["name"], str) or not isinstance(
+                                    function["arguments"], str
+                                ):
                                     raise ValueError("invalid function call")
-                                calls.append(ToolCallDelta(index=index, call_id=part.get("id") or f"call_{uuid4().hex}", name=function["name"], arguments=function["arguments"]))
+                                calls.append(
+                                    ToolCallDelta(
+                                        index=index,
+                                        call_id=part.get("id") or f"call_{uuid4().hex}",
+                                        name=function["name"],
+                                        arguments=function["arguments"],
+                                    )
+                                )
                             content = ""
                         elif finish_reason == "stop" and not tool_calls:
                             content = message["content"]

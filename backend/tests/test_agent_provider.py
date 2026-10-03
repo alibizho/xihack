@@ -42,7 +42,7 @@ def test_mimo_client_parses_tool_response_and_keeps_api_key_in_header(monkeypatc
                                 "function": {"name": "get_task", "arguments": '{"task_id":"abc"}'},
                             }
                         ],
-                    }
+                    },
                 }
             ],
             "usage": {"prompt_tokens": 12, "completion_tokens": 4},
@@ -114,7 +114,9 @@ def test_client_retries_one_transient_provider_failure(monkeypatch, first_failur
         attempts += 1
         if attempts == 1:
             raise first_failure
-        return FakeResponse({"choices": [{"finish_reason": "stop", "message": {"content": "ready"}}]})
+        return FakeResponse(
+            {"choices": [{"finish_reason": "stop", "message": {"content": "ready"}}]}
+        )
 
     monkeypatch.setattr("assistant_backend.agent.provider.urlopen", flaky_urlopen)
     client = ChatCompletionClient(
@@ -135,7 +137,9 @@ def test_mimo_is_selected_even_when_other_gateway_key_exists(monkeypatch) -> Non
     def fake_urlopen(request, timeout):
         seen["request"] = request
         assert timeout == 35
-        return FakeResponse({"choices": [{"finish_reason": "stop", "message": {"content": "好的"}}]})
+        return FakeResponse(
+            {"choices": [{"finish_reason": "stop", "message": {"content": "好的"}}]}
+        )
 
     monkeypatch.setattr("assistant_backend.agent.provider.urlopen", fake_urlopen)
     settings = Settings(

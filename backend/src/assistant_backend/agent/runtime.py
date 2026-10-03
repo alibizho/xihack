@@ -32,9 +32,16 @@ SYSTEM_PROMPT = """你是拾序的事务助理。用户可能随口讲一大段�
 工具参数不得包含 user_id。简洁、明确地用中文回复，不输出思维过程。"""
 
 PROPOSAL_CLAIM_MARKERS = (
-    "已生成待确认提案", "已创建待确认提案", "已保存待确认提案",
-    "提案已生成", "提案已创建", "提案已保存",
-    "已生成提案", "已创建提案", "已保存提案", "已准备好提案",
+    "已生成待确认提案",
+    "已创建待确认提案",
+    "已保存待确认提案",
+    "提案已生成",
+    "提案已创建",
+    "提案已保存",
+    "已生成提案",
+    "已创建提案",
+    "已保存提案",
+    "已准备好提案",
 )
 
 
@@ -110,7 +117,9 @@ class AgentRuntime:
                         for part in chunk.tool_calls:
                             aggregate = calls[part.index]
                             aggregate.index = part.index
-                            aggregate.call_id = self._merge_identifier(aggregate.call_id, part.call_id)
+                            aggregate.call_id = self._merge_identifier(
+                                aggregate.call_id, part.call_id
+                            )
                             aggregate.name = self._merge_identifier(aggregate.name, part.name)
                             aggregate.arguments += part.arguments
                         if chunk.content:
@@ -195,7 +204,9 @@ class AgentRuntime:
                         if call.name.startswith("propose_"):
                             result = proposal_tools.invoke(call.name, call.arguments, call.call_id)
                             proposal_result = json.loads(result)
-                            if proposal_result.get("status") == "pending" and proposal_result.get("proposal_id"):
+                            if proposal_result.get("status") == "pending" and proposal_result.get(
+                                "proposal_id"
+                            ):
                                 proposal_saved = True
                         else:
                             result = tools.invoke(call.name, call.arguments)
@@ -208,7 +219,9 @@ class AgentRuntime:
                 if "<tool_call" in final_content.lower():
                     self._fail(run_id, worker_id, "MODEL_INVALID_RESPONSE")
                     return
-                if not proposal_saved and any(marker in final_content for marker in PROPOSAL_CLAIM_MARKERS):
+                if not proposal_saved and any(
+                    marker in final_content for marker in PROPOSAL_CLAIM_MARKERS
+                ):
                     self._fail(run_id, worker_id, "PROPOSAL_NOT_CREATED")
                     return
                 if not final_content:
