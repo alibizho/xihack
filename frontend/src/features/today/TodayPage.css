@@ -19,7 +19,7 @@
 @keyframes voice-pulse { from { transform: scale(.94); opacity: .8; } to { transform: scale(1.27); opacity: 0; } }
 @keyframes orb-breathe { 50% { box-shadow: inset -13px -15px 22px #8caec229, inset 9px 8px 18px #fff, 0 18px 39px #819bb562; } }
 .voice-orb svg { background: #ffffffb8; border-radius: 50%; padding: 10px; width: 50px; height: 50px; }
-.voice-capture-expanded { display: grid; grid-template-rows: 0fr; align-self: stretch; min-width: 0; opacity: 0; width: min(100%, 760px); transition: grid-template-rows .34s ease, opacity .24s ease; }
+.voice-capture-expanded { display: grid; grid-template-rows: 0fr; align-self: center; min-width: 0; opacity: 0; width: min(100%, 760px); transition: grid-template-rows .34s ease, opacity .24s ease; }
 .voice-capture-expanded-inner { width: 100%; min-width: 0; min-height: 0; overflow: hidden; }
 .voice-capture.is-open .voice-capture-expanded { grid-template-rows: 1fr; opacity: 1; }
 .voice-capture-expanded .assistant-quick-replies { width: 100%; }
