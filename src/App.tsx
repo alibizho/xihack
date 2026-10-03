@@ -31,6 +31,10 @@ export function App() {
   const [username, setUsername] = useState<string | null | undefined>();
   const [connectionError, setConnectionError] = useState("");
   const [lang, setLangState] = useState<Lang>(getLang());
+  useEffect(() => {
+    document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
+    document.title = t("appTitle");
+  }, [lang]);
   function changeLang(next: Lang) {
     setLang(next);
     setLangState(next);

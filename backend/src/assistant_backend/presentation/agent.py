@@ -135,7 +135,7 @@ def _event_stream(
         if time.monotonic() - last_heartbeat >= 15:
             yield ": keep-alive\n\n"
             last_heartbeat = time.monotonic()
-        time.sleep(0.5)
+        time.sleep(0.15)
 
 
 @router.get(

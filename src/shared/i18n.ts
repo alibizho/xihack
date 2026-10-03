@@ -36,7 +36,9 @@ const zh = {
   dateLabel: "日期", timeLabel: "时间", categoryLabel: "分类", uncategorized: "未分类",
   importanceLabel: "重要度", urgencyLabel: "紧急度", confirmWrite: "确认写入", cancel: "取消",
   confirmedLabel: "已确认", cancelledLabel: "已取消", chatLabel: "对话内容", chatPlaceholder: "说出或输入你想问的事",
-  processing: "正在处理…", confirmNote: "事务变更仍需逐项确认。也可以问「我该先做哪件事？」",
+  processing: "正在处理…", assistantProcessing: "正在处理你的消息…", assistantThinking: "正在理解你的意思…", assistantSearching: "正在帮你核对相关事务…", assistantReplying: "正在整理回复…",
+  proposalAreaLabel: "待确认事务", proposalPrevious: "上一项提案", proposalNext: "下一项提案", proposalAreaComplete: "目前没有待确认的事项。",
+  confirmNote: "事务变更仍需逐项确认。也可以问「我该先做哪件事？」",
   guestVoiceNote: "游客模式 · AI 助理剩余 {n} 次；手动添加事务不受限制。",
   reviewAction: "下局只试一件事", reviewFocus: "这一局，哪里值得留意", reviewProvider: "MiMo 复盘",
   reviewLoading: "正在生成本局复盘…成绩已保存。", reviewMissing: "本局复盘尚未生成", reviewRetry: "重试生成", reviewGenerate: "生成复盘",
@@ -135,7 +137,9 @@ const en: Record<Key, string> = {
   dateLabel: "Date", timeLabel: "Time", categoryLabel: "Category", uncategorized: "Uncategorized",
   importanceLabel: "Importance", urgencyLabel: "Urgency", confirmWrite: "Confirm", cancel: "Cancel",
   confirmedLabel: "Confirmed", cancelledLabel: "Cancelled", chatLabel: "Message", chatPlaceholder: "Say or type what you want to ask",
-  processing: "Processing…", confirmNote: "Changes need your confirmation. Try “What should I do first?”",
+  processing: "Processing…", assistantProcessing: "Working on your message…", assistantThinking: "Making sense of that…", assistantSearching: "Checking the relevant tasks…", assistantReplying: "Putting together a reply…",
+  proposalAreaLabel: "Tasks to review", proposalPrevious: "Previous proposal", proposalNext: "Next proposal", proposalAreaComplete: "There are no tasks waiting for your confirmation.",
+  confirmNote: "Changes need your confirmation. Try “What should I do first?”",
   guestVoiceNote: "Guest · {n} AI calls left · manual tasks free",
   reviewAction: "One thing to try next round", reviewFocus: "One thing to notice this round", reviewProvider: "MiMo review",
   reviewLoading: "Generating this round’s review… Your result is saved.", reviewMissing: "No review yet", reviewRetry: "Try again", reviewGenerate: "Generate review",
@@ -200,7 +204,8 @@ const en: Record<Key, string> = {
 // ponytail: module-level locale + full-app re-render from App state; swap for react-i18next if lazy loading per-route is ever needed.
 const dicts: Record<Lang, Record<Key, string>> = { zh, en };
 const stored = typeof localStorage === "undefined" ? null : localStorage.getItem("xihack:lang");
-let lang: Lang = stored === "en" ? "en" : "zh";
+const browserLanguage = typeof navigator === "undefined" ? "zh" : navigator.languages?.[0] || navigator.language || "zh";
+let lang: Lang = stored === "zh" || stored === "en" ? stored : browserLanguage.toLowerCase().startsWith("zh") ? "zh" : "en";
 
 export const getLang = (): Lang => lang;
 export const t = (key: Key): string => dicts[lang][key];

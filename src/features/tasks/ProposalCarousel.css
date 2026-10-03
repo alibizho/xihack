@@ -1,0 +1,26 @@
+.voice-proposal-area { padding: 12px 0 6px; }
+.voice-proposal-stage { display: grid; grid-template-columns: 44px minmax(0, 560px) 44px; align-items: center; justify-content: center; gap: 10px; }
+.voice-proposal { width: 100%; min-width: 0; padding: 18px 20px; border: 1px solid #b8cbd0; background: #f4f8f5; color: var(--ink); animation: proposal-enter .18s ease-out both; }
+.voice-proposal-kind { color: var(--blue-dark); font-size: 12px; font-weight: 700; }
+.voice-proposal-title { margin: 7px 0 9px; font-size: 18px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+.voice-proposal-description { margin: 6px 0 10px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.voice-proposal-details { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 12px 0 16px; font-size: 13px; line-height: 1.5; }
+.voice-proposal-details dt { color: var(--blue-dark); }
+.voice-proposal-details dd { margin: 0; overflow-wrap: anywhere; }
+.voice-proposal-actions { display: flex; gap: 9px; margin-top: 16px; }
+.voice-proposal-actions button { flex: 1; min-height: 46px; border: 1px solid var(--blue); color: var(--blue); background: transparent; cursor: pointer; }
+.voice-proposal-actions button:last-child { color: white; background: var(--blue); }
+.voice-proposal-actions button:disabled { opacity: .55; cursor: wait; }
+.proposal-nav { width: 44px; height: 48px; display: grid; place-items: center; border: 0; background: transparent; color: var(--blue-dark); cursor: pointer; }
+.proposal-nav:disabled { opacity: .3; cursor: default; }
+.proposal-nav:not(:disabled):hover { background: #eaf1ef; }
+.proposal-nav:focus-visible, .voice-proposal-actions button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.proposal-progress { margin: 8px 0 0; color: #59717c; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.voice-proposal-empty { max-width: 560px; margin: 0 auto; padding: 12px 16px; color: #59717c; background: #edf3ef; text-align: center; font-size: 13px; }
+@keyframes proposal-enter { from { opacity: .65; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+@media (max-width: 520px) {
+  .voice-proposal-stage { grid-template-columns: 34px minmax(0, 1fr) 34px; gap: 4px; }
+  .voice-proposal { padding: 15px; }
+  .proposal-nav { width: 34px; min-height: 48px; }
+}
+@media (prefers-reduced-motion: reduce) { .voice-proposal { animation: none; } }

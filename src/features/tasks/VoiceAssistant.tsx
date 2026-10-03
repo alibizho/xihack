@@ -1,23 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
-import { fill, t, uiLocale } from "../../shared/i18n.ts";
-import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposals, sendMessage, withLocalContext, type Due, type Proposal } from "./agentApi";
+import { fill, getLang, t, type Lang } from "../../shared/i18n.ts";
+import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposals, sendMessage, streamRun, withLocalContext, type Proposal } from "./agentApi";
 import { startAudioCapture, type AudioCapture, type CapturedAudio } from "./audioCapture";
 import { browserAsrIsReady, prepareBrowserAsr, transcribeBrowser } from "./speech/browserAsr";
+import { ProposalCarousel } from "./ProposalCarousel";
 import "./TaskComposer.css";
 
 type Message = { role: "user" | "assistant"; text: string };
 export type GuestQuota = { left: number; spend: () => boolean };
 
-function dueParts(due: Due | undefined) {
-  if (!due) return { date: t("dateUnset"), time: t("dateUnset") };
-  if (due.precision === "date") return { date: due.date, time: t("allDay") };
-  const when = new Date(due.at);
-  return {
-    date: new Intl.DateTimeFormat(uiLocale(), { timeZone: due.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(when),
-    time: new Intl.DateTimeFormat(uiLocale(), { timeZone: due.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(when),
-  };
+function mergeProposals(current: Proposal[], incoming: Proposal[]) {
+  const merged = new Map(current.map((proposal) => [proposal.proposal_id, proposal]));
+  for (const proposal of incoming) merged.set(proposal.proposal_id, proposal);
+  return [...merged.values()];
 }
 
 export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; guestQuota?: GuestQuota; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
@@ -30,16 +27,21 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
   const sessionId = useRef(0);
   const conversationId = useRef("");
   const conversationRequestId = useRef(crypto.randomUUID());
-  const pendingMessage = useRef({ content: "", payload: "", id: "", shown: false });
+  const pendingMessage = useRef({ content: "", payload: "", id: "", shown: false, language: "zh" as Lang });
   const inputRef = useRef("");
   const openedFromButton = useRef(false);
   const confirmKeys = useRef(new Map<string, string>());
+  const runAbort = useRef<AbortController | null>(null);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [proposalFocusId, setProposalFocusId] = useState<string>();
   const [clarification, setClarification] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [runBusy, setRunBusy] = useState(false);
+  const [runPhase, setRunPhase] = useState("queued");
+  const [streamingReply, setStreamingReply] = useState("");
   const [preparing, setPreparing] = useState(false);
   const [listening, setListening] = useState(false);
 
@@ -65,6 +67,7 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     return () => {
       active.current = false;
       sessionId.current++;
+      runAbort.current?.abort();
       clearRecordingTimer();
       const current = capture.current;
       capture.current = null;
@@ -72,6 +75,8 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       setPreparing(false);
       setListening(false);
       setBusy(false);
+      setRunBusy(false);
+      setStreamingReply("");
       document.removeEventListener("visibilitychange", stop);
       document.removeEventListener("keydown", escape);
     };
@@ -79,7 +84,7 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
 
   function close() { orbButton.current?.focus(); onClose(); }
 
-  useEffect(() => { messageEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages, input, busy]);
+  useEffect(() => { messageEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages, runBusy, streamingReply, runPhase]);
 
   function openAndRecord() {
     active.current = true;
@@ -184,6 +189,9 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     if (content.length > 8000) { setError(t("errTooLong")); return; }
     if (guestQuota && guestQuota.left <= 0) { setError(t("errGuestQuota")); return; }
     setBusy(true);
+    setRunBusy(true);
+    setRunPhase("queued");
+    setStreamingReply("");
     setError("");
     try {
       const token = await csrf();
@@ -193,7 +201,8 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
         conversationId.current = conversation.conversation_id;
       }
       if (session !== sessionId.current) return;
-      if (pendingMessage.current.content !== content) pendingMessage.current = { content, payload: withLocalContext(content), id: crypto.randomUUID(), shown: false };
+      const language = getLang();
+      if (pendingMessage.current.content !== content || pendingMessage.current.language !== language) pendingMessage.current = { content, payload: withLocalContext(content, language), id: crypto.randomUUID(), shown: false, language };
       const { run_id } = await sendMessage(conversationId.current, pendingMessage.current.payload, pendingMessage.current.id, token);
       if (session !== sessionId.current) return;
       if (guestQuota) guestQuota.spend();
@@ -205,31 +214,49 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       inputRef.current = "";
       lastAudio.current = null;
       setClarification("");
-      for (let attempt = 0; attempt < 120 && active.current && session === sessionId.current; attempt++) {
-        const run = await getRun(run_id);
-        if (session !== sessionId.current) return;
-        if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
-          const found = await getRunProposals(run_id);
-          setProposals((current) => [...current, ...found]);
+      const controller = new AbortController();
+      runAbort.current?.abort();
+      runAbort.current = controller;
+      try {
+        await streamRun(run_id, {
+          onPhase: setRunPhase,
+          onText: (text) => setStreamingReply((current) => current + text),
+        }, controller.signal);
+      } catch (reason) {
+        if (reason instanceof DOMException && reason.name === "AbortError") return;
+        for (let attempt = 0; attempt < 360 && active.current && session === sessionId.current; attempt++) {
+          const current = await getRun(run_id);
+          setRunPhase(current.phase || current.status);
+          if (["completed", "failed", "cancelled"].includes(current.status)) break;
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
-        if (run.status === "completed") {
-          pendingMessage.current = { content: "", payload: "", id: "", shown: false };
-          setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || t("errNoReply") }]);
-          return;
-        }
-        if (run.status === "failed" || run.status === "cancelled") {
-          pendingMessage.current = { content: "", payload: "", id: "", shown: false };
-          throw new Error(`${t("errRunFailed")}${run.error_code ? ` (${run.error_code})` : ""}`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+      } finally { if (runAbort.current === controller) runAbort.current = null; }
+      if (!active.current || session !== sessionId.current) return;
+      const run = await getRun(run_id);
+      if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
+        const found = await getRunProposals(run_id);
+        setProposals((current) => mergeProposals(current, found));
+        const newestPending = [...found].reverse().find((proposal) => proposal.status === "pending");
+        if (newestPending) setProposalFocusId(newestPending.proposal_id);
       }
-      if (active.current && session === sessionId.current) throw new Error(t("errTimeout"));
+      if (run.status === "completed") {
+        pendingMessage.current = { content: "", payload: "", id: "", shown: false, language: getLang() };
+        setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || t("errNoReply") }]);
+        setStreamingReply("");
+        return;
+      }
+      if (run.status === "failed" || run.status === "cancelled") {
+        pendingMessage.current = { content: "", payload: "", id: "", shown: false, language: getLang() };
+        setStreamingReply("");
+        throw new Error(`${t("errRunFailed")}${run.error_code ? ` (${run.error_code})` : ""}`);
+      }
+      throw new Error(t("errTimeout"));
     } catch (reason) {
       if (active.current && session === sessionId.current) {
         if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
         else { inputRef.current = content; setInput(content); setError((reason as Error).message); }
       }
-    } finally { if (active.current && session === sessionId.current) setBusy(false); }
+    } finally { if (active.current && session === sessionId.current) { setBusy(false); setRunBusy(false); setStreamingReply(""); } }
   }
 
   async function decide(proposal: Proposal, accept: boolean) {
@@ -257,26 +284,14 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
     {!preparing && lastAudio.current && input && <button className="voice-chat-note voice-enhance" type="button" onClick={() => void retryEnhancedTranscription()}>{t("enhancedRecognition")}</button>}
-    {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
+    {(messages.length > 0 || runBusy || streamingReply) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
-      {proposals.map((proposal, index) => {
-        const task = proposal.task || proposal.changes;
-        const due = dueParts(task?.due);
-        return <article className="voice-proposal" key={proposal.proposal_id}>
-          <strong>{t("proposalLabel")} {index + 1} · {proposal.operation === "create" ? t("opCreate") : proposal.operation === "complete" ? t("opComplete") : proposal.operation === "delete" ? t("opDelete") : t("opUpdate")}</strong>
-          <p className="voice-proposal-title">{task?.title || proposal.task_id}</p>
-          {task?.description && <p className="voice-proposal-description">{task.description}</p>}
-          {task && <dl className="voice-proposal-details">
-            {(proposal.operation === "create" || task.due !== undefined) && <><dt>{t("dateLabel")}</dt><dd>{due.date}</dd><dt>{t("timeLabel")}</dt><dd>{due.time}</dd></>}
-            {(proposal.operation === "create" || task.category !== undefined) && <><dt>{t("categoryLabel")}</dt><dd>{task.category || t("uncategorized")}</dd></>}
-            {typeof task.importance === "number" && <><dt>{t("importanceLabel")}</dt><dd>{task.importance.toFixed(1)} / 10</dd></>}
-            {typeof task.urgency === "number" && <><dt>{t("urgencyLabel")}</dt><dd>{task.urgency.toFixed(1)} / 10</dd></>}
-          </dl>}
-          {proposal.status === "pending" ? <div className="voice-proposal-actions"><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>{t("cancel")}</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>{t("confirmWrite")}</button></div> : <small>{proposal.status === "confirmed" ? t("confirmedLabel") : t("cancelledLabel")}</small>}
-        </article>;
-      })}
+      {runBusy && (streamingReply
+        ? <p className="voice-chat-bubble assistant">{streamingReply}<span className="assistant-stream-caret" aria-hidden="true" /></p>
+        : <p className="voice-chat-bubble assistant voice-assistant-status" role="status"><span className="assistant-status-dot" aria-hidden="true" />{runPhase === "searching_tasks" ? t("assistantSearching") : runPhase === "answering" ? t("assistantReplying") : runPhase === "thinking" || runPhase === "starting" ? t("assistantThinking") : t("assistantProcessing")}</p>)}
       <div ref={messageEnd} />
     </div>}
+    <ProposalCarousel proposals={proposals} busy={busy} focusProposalId={proposalFocusId} onDecide={(proposal, accept) => void decide(proposal, accept)} />
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
     <label className="field-label" htmlFor="voice-input">{t("chatLabel")}</label>
     <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder={t("chatPlaceholder")} />

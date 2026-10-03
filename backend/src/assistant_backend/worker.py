@@ -29,7 +29,7 @@ def run_worker() -> None:
                 last_prune = time.monotonic()
             run_id = runs.claim_next(worker_id)
             if run_id is None:
-                time.sleep(0.5)
+                time.sleep(0.1)
                 continue
             runtime.execute(run_id, worker_id)
     except KeyboardInterrupt:

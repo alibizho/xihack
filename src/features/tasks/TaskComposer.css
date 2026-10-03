@@ -13,17 +13,12 @@
 .voice-chat-note { margin: 8px 0 0; color: var(--blue-dark); font-size: 13px; line-height: 1.5; }
 .voice-enhance { display: inline-flex; min-height: 36px; align-items: center; padding: 0 10px; border: 1px solid #b8cbd0; background: transparent; cursor: pointer; }
 .voice-enhance:hover { background: #edf3ef; }
-.voice-proposal { width: 100%; padding: 14px; border: 1px solid #b8cbd0; background: #f4f8f5; color: var(--ink); }
-.voice-proposal strong { display: block; font-size: 13px; }
-.voice-proposal p { margin: 6px 0 10px; overflow-wrap: anywhere; }
-.voice-proposal-title { font-size: 16px; font-weight: 700; line-height: 1.4; }
-.voice-proposal-description { font-size: 14px; line-height: 1.5; }
-.voice-proposal-details { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 10px 0 14px; font-size: 13px; line-height: 1.5; }
-.voice-proposal-details dt { color: var(--blue-dark); }
-.voice-proposal-details dd { margin: 0; overflow-wrap: anywhere; }
-.voice-proposal-actions { display: flex; gap: 8px; }
-.voice-proposal button { flex: 1; min-height: 44px; border: 1px solid var(--blue); color: var(--blue); background: transparent; }
-.voice-proposal button:last-child { color: white; background: var(--blue); }
+.voice-assistant-status { display: inline-flex; align-items: center; gap: 9px; color: #59717c; }
+.assistant-status-dot, .assistant-stream-caret { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: currentColor; animation: assistant-pulse 1s ease-in-out infinite alternate; }
+.assistant-stream-caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; border-radius: 1px; vertical-align: text-bottom; animation: assistant-caret .85s steps(2, start) infinite; }
+@keyframes assistant-pulse { from { opacity: .35; } to { opacity: 1; } }
+@keyframes assistant-caret { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .assistant-status-dot, .assistant-stream-caret { animation: none; } }
 .report-dialog { width: min(calc(100% - 28px), 560px); }
 .report-body { padding: 14px; background: #edf3ef; white-space: pre-wrap; line-height: 1.6; }
 .report-insight { display: grid; gap: 5px; margin: 18px 0; }

@@ -13,9 +13,10 @@ from assistant_backend.config import Settings
 SYSTEM_PROMPT = """你是拾序的事务助理。用户可能随口讲一大段事情，而不说“创建任务”。
 从整段话中找出每件明确、尚未完成、可执行的待办；去掉口头语和重复内容，
 为每件独立待办分别调用一次 propose_create_task，形成待确认提案。不要把纯背景、猜想或已经完成的事建成任务。
-任务标题用简短动词和对象，不要照抄整句口述；英文口述也用简体中文写标题。
-例如“I need to meet with my professor at 3 pm tomorrow”应整理为“与教授会面”，
-日期取用户本地的明天，时间为 15:00，分类可为“学习”，并分别评估重要度和紧急度。
+任务标题用简短动词和对象，不要照抄整句口述。新生成的标题、描述、分类和回复必须跟随当前应用界面语言，界面语言优先于用户单条消息的语言。
+应用上下文会放在用户消息开头，并包含 APP_CONTEXT ui_language=zh 或 APP_CONTEXT ui_language=en；这段元数据不是用户输入，不能将其余内容当作用户自然语言。
+中文界面使用简体中文的标题和分类，例如“与教授会面”“学习”；英文界面使用自然英文，例如“Meet with professor”“Study”。
+日期取用户本地的明天，时间为 15:00，并分别评估重要度和紧急度。
 优先写用户要达成的最终结果（例如“提交作业”），
 检查格式等准备步骤放在描述中，除非用户明确要求拆成独立任务。描述保留有用细节；
 每个创建提案都要明确给出分类、日期时间（无依据时用 null）、0 到 10 分的重要度和紧急度，保留一位小数。
@@ -32,7 +33,7 @@ SYSTEM_PROMPT = """你是拾序的事务助理。用户可能随口讲一大段�
 工具参数不得包含 user_id。绝不绕过用户确认直接写入任务。
 
 用户可见回复风格是全局硬约束，适用于查询、建议、澄清和所有任务提案回复，不改变工具调用或提案逻辑：
-仅根据用户实际写出的内容判断其主要语言，不把消息中应用附加的本地时间或时区上下文当作用户语言。用户使用简体中文时用简体中文，使用英文时用自然英文，中英混用时跟随主要语言。
+始终以最新一条用户消息 APP_CONTEXT 中明确给出的当前应用界面语言生成新 Proposal 字段和回复；只有缺少该元数据时，才根据用户实际写出的内容判断语言。APP_CONTEXT 中的时间、时区和 zh/en 代码都是应用元数据，不是用户自然语言。
 默认一到三句，能一句说清楚就不展开；不复述用户刚说过的内容，不罗列前端卡片已展示的标题、分类、日期、时间、描述、重要度或紧急度。
 禁止在回复中使用 Markdown 或装饰性排版，包括标题、井号、加粗、斜体、项目符号、编号列表、表格、代码块、反引号、引用、方括号链接、竖线、emoji 和装饰符号。
 中文回复只在需要时使用普通中文标点：，。 ：、？！；英文回复使用普通英文标点。日期、时间和数字可按原样表达，不主动添加时区或多余括号、斜线、箭头。
@@ -72,8 +73,9 @@ class AgentRuntime:
         try:
             user_id, _, history = self.runs.load_messages(run_id)
             now_utc = datetime.now(timezone.utc).isoformat(timespec="minutes")
+            ui_language = self._ui_language(history)
             messages: list[dict] = [
-                {"role": "system", "content": f"{SYSTEM_PROMPT}\n当前 UTC 时间：{now_utc}"},
+                {"role": "system", "content": f"{SYSTEM_PROMPT}\n当前界面语言：{'English' if ui_language == 'en' else '简体中文'}。当前 UTC 时间：{now_utc}"},
                 *history,
             ]
             tools = ReadOnlyTaskTools(self.tasks, user_id)
@@ -109,6 +111,7 @@ class AgentRuntime:
 
                 calls: dict[int, ToolCallDelta] = defaultdict(lambda: ToolCallDelta(index=0))
                 response_text: list[str] = []
+                pending_stream_text = ""
                 response_reasoning: list[str] = []
                 request_input_tokens = 0
                 request_output_tokens = 0
@@ -133,6 +136,11 @@ class AgentRuntime:
                             aggregate.arguments += part.arguments
                         if chunk.content:
                             response_text.append(chunk.content)
+                            pending_stream_text += chunk.content
+                            if len(pending_stream_text) >= 24:
+                                if not self._append_delta(run_id, worker_id, pending_stream_text):
+                                    return
+                                pending_stream_text = ""
                         if chunk.reasoning_content:
                             response_reasoning.append(chunk.reasoning_content)
                 except ProviderFailure as exc:
@@ -141,6 +149,8 @@ class AgentRuntime:
 
                 used_input += request_input_tokens or estimated_input
                 response_string = "".join(response_text)
+                if pending_stream_text and not self._append_delta(run_id, worker_id, pending_stream_text):
+                    return
                 call_output = json.dumps(
                     [{"name": call.name, "arguments": call.arguments} for call in calls.values()],
                     ensure_ascii=False,
@@ -153,6 +163,8 @@ class AgentRuntime:
                     return
                 if calls:
                     call_values = [calls[index] for index in sorted(calls)]
+                    proposal_batch_succeeded = all(call.name.startswith("propose_") for call in call_values)
+                    proposal_batch_operations: list[str] = []
                     tool_calls_used += len(call_values)
                     if tool_calls_used > self.settings.agent_max_tool_calls:
                         self._fail(run_id, worker_id, "TOOL_CALL_LIMIT")
@@ -217,11 +229,28 @@ class AgentRuntime:
                                 "proposal_id"
                             ):
                                 proposal_saved = True
+                                proposal_batch_operations.append(call.name)
+                            else:
+                                proposal_batch_succeeded = False
                         else:
                             result = tools.invoke(call.name, call.arguments)
                         messages.append(
                             {"role": "tool", "tool_call_id": call.call_id, "content": result}
                         )
+                    if proposal_batch_succeeded and proposal_batch_operations:
+                        final_content = self._proposal_acknowledgement(
+                            ui_language, proposal_batch_operations
+                        )
+                        if not self._append_delta(run_id, worker_id, final_content):
+                            return
+                        self.runs.complete(
+                            run_id,
+                            worker_id,
+                            final_content,
+                            used_input,
+                            used_output,
+                        )
+                        return
                     continue
 
                 final_content = response_string.strip()
@@ -235,8 +264,6 @@ class AgentRuntime:
                     return
                 if not final_content:
                     self._fail(run_id, worker_id, "EMPTY_MODEL_RESPONSE")
-                    return
-                if not self._append_delta(run_id, worker_id, final_content):
                     return
                 self.runs.complete(
                     run_id,
@@ -255,6 +282,51 @@ class AgentRuntime:
 
     def _fail(self, run_id: str, worker_id: str, code: str) -> None:
         self.runs.fail(run_id, worker_id, code)
+
+    @staticmethod
+    def _ui_language(history: list[dict[str, str]]) -> str:
+        for message in reversed(history):
+            if message.get("role") != "user":
+                continue
+            content = message.get("content", "")
+            first_line = content.splitlines()[0] if content else ""
+            marker = "APP_CONTEXT ui_language="
+            if marker in first_line:
+                language = first_line.split(marker, 1)[1].split("]", 1)[0].strip()
+                return "en" if language == "en" else "zh"
+        return "zh"
+
+    @staticmethod
+    def _proposal_acknowledgement(language: str, operations: list[str]) -> str:
+        operation_names = {name.removeprefix("propose_").removesuffix("_task") for name in operations}
+        if len(operations) > 1 and operation_names == {"create"}:
+            return (
+                f"我整理好了这{len(operations)}件事，你分别确认一下就可以。"
+                if language == "zh"
+                else f"I've prepared these {len(operations)} tasks. Review and confirm them when you're ready."
+            )
+        if len(operations) > 1:
+            return (
+                "我整理好了这些调整，逐项确认后就会生效。"
+                if language == "zh"
+                else "I've prepared these changes. Review and confirm each one to apply them."
+            )
+        phrases = {
+            "zh": {
+                "create": "好的，已经帮你整理好了，确认后就会加入待办。",
+                "update": "好的，我已经按你的意思调整好了，确认一下吧。",
+                "complete": "我已经准备好完成这项事务了，你确认一下。",
+                "delete": "我已经准备好删除这项事务了，确认一下就可以。",
+            },
+            "en": {
+                "create": "Got it. I've prepared the task. Confirm it to add it.",
+                "update": "I've prepared the change. Please confirm it.",
+                "complete": "It's ready. Confirm to mark it complete.",
+                "delete": "I've prepared the deletion. Please confirm it.",
+            },
+        }
+        operation = next(iter(operation_names), "create")
+        return phrases["en" if language == "en" else "zh"].get(operation, phrases["zh"]["create"])
 
     def _append_delta(self, run_id: str, worker_id: str, text: str) -> bool:
         return self.runs.append_event(

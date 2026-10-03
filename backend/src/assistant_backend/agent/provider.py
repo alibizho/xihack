@@ -25,6 +25,7 @@ class ChatDelta:
     tool_calls: list[ToolCallDelta] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
+    finish_reason: str | None = None
 
 
 class ProviderFailure(Exception):
@@ -89,11 +90,9 @@ class ChatCompletionClient:
         payload: dict = {
             "model": self.model,
             "messages": messages,
-            "stream": False,
+            "stream": True,
             "max_completion_tokens" if is_mimo else "max_tokens": max_output_tokens,
         }
-        if is_mimo:
-            payload["thinking"] = {"type": "enabled"}
         if tools:
             payload["tools"] = (
                 tools
@@ -123,65 +122,94 @@ class ChatCompletionClient:
             headers={
                 "Authorization": f"Bearer {self.api_key.get_secret_value()}",
                 "Content-Type": "application/json",
-                "Accept": "application/json",
+                "Accept": "text/event-stream",
                 "User-Agent": "ShixuBackend/0.3",
             },
             method="POST",
         )
         for attempt in range(2):
+            stream_started = False
             try:
                 with urlopen(request, timeout=35) as response:
-                    try:
-                        result = json.load(response)
-                        choice = result["choices"][0]
-                        message = choice["message"]
-                        finish_reason = choice["finish_reason"]
-                        usage = result.get("usage") or {}
-                        tool_calls = message.get("tool_calls") or []
-                        reasoning_content = message.get("reasoning_content") or ""
-                        if not isinstance(reasoning_content, str):
-                            raise ValueError("invalid reasoning content")
-                        if finish_reason == "tool_calls" and tool_calls:
-                            calls = []
-                            for index, part in enumerate(tool_calls):
-                                if part["type"] != "function":
-                                    raise ValueError("unexpected tool type")
-                                function = part["function"]
-                                if not isinstance(function["name"], str) or not isinstance(
-                                    function["arguments"], str
-                                ):
-                                    raise ValueError("invalid function call")
-                                calls.append(
-                                    ToolCallDelta(
-                                        index=index,
-                                        call_id=part.get("id") or f"call_{uuid4().hex}",
-                                        name=function["name"],
-                                        arguments=function["arguments"],
+                    pending_data: list[str] = []
+                    call_parts: dict[int, ToolCallDelta] = {}
+                    finish_reason: str | None = None
+                    saw_done = False
+                    while line := response.readline():
+                        if line not in (b"\n", b"\r\n"):
+                            if line.startswith(b"data:"):
+                                pending_data.append(line[5:].decode("utf-8").strip())
+                            continue
+                        if not pending_data:
+                            continue
+                        data = "\n".join(pending_data)
+                        pending_data.clear()
+                        if data == "[DONE]":
+                            saw_done = True
+                            break
+                        try:
+                            result = json.loads(data)
+                            usage = result.get("usage") or {}
+                            choices = result.get("choices") or []
+                            if not choices:
+                                if usage:
+                                    yield ChatDelta(
+                                        input_tokens=int(usage.get("prompt_tokens", 0)),
+                                        output_tokens=int(usage.get("completion_tokens", 0)),
                                     )
-                                )
-                            content = ""
-                        elif finish_reason == "stop" and not tool_calls:
-                            content = message["content"]
-                            if not isinstance(content, str) or "<tool_call" in content.lower():
-                                raise ValueError("invalid final answer")
-                            calls = []
-                        elif finish_reason == "length":
-                            raise ProviderFailure("MODEL_TRUNCATED_RESPONSE", True)
-                        else:
-                            raise ValueError("invalid finish reason")
-                        yield ChatDelta(
-                            content=content,
-                            reasoning_content=reasoning_content,
-                            tool_calls=calls,
-                            input_tokens=int(usage.get("prompt_tokens", 0)),
-                            output_tokens=int(usage.get("completion_tokens", 0)),
-                        )
-                        return
-                    except (KeyError, IndexError, TypeError, ValueError) as exc:
-                        raise ProviderFailure("MODEL_INVALID_RESPONSE", True) from exc
+                                continue
+                            choice = choices[0]
+                            delta = choice.get("delta") or {}
+                            content = delta.get("content") or ""
+                            reasoning = delta.get("reasoning_content") or ""
+                            if not isinstance(content, str) or not isinstance(reasoning, str):
+                                raise ValueError("invalid content delta")
+                            current_calls = []
+                            for part in delta.get("tool_calls") or []:
+                                index = int(part["index"])
+                                aggregate = call_parts.setdefault(index, ToolCallDelta(index=index))
+                                if part.get("id"):
+                                    aggregate.call_id = self._merge_fragment(aggregate.call_id, part["id"])
+                                function = part.get("function") or {}
+                                if function.get("name"):
+                                    aggregate.name = self._merge_fragment(aggregate.name, function["name"])
+                                if function.get("arguments"):
+                                    aggregate.arguments += function["arguments"]
+                                current_calls.append(ToolCallDelta(index=index, call_id=part.get("id", ""), name=function.get("name", ""), arguments=function.get("arguments", "")))
+                            finish_reason = choice.get("finish_reason") or finish_reason
+                            if finish_reason == "length":
+                                raise ProviderFailure("MODEL_TRUNCATED_RESPONSE", True)
+                            if finish_reason and finish_reason not in {"stop", "tool_calls"}:
+                                raise ValueError("invalid finish reason")
+                            chunk = ChatDelta(
+                                content=content,
+                                reasoning_content=reasoning,
+                                tool_calls=current_calls,
+                                input_tokens=int(usage.get("prompt_tokens", 0)),
+                                output_tokens=int(usage.get("completion_tokens", 0)),
+                                finish_reason=choice.get("finish_reason"),
+                            )
+                            if content or reasoning or current_calls or usage or finish_reason:
+                                stream_started = True
+                                yield chunk
+                        except ProviderFailure:
+                            raise
+                        except (KeyError, IndexError, TypeError, ValueError) as exc:
+                            raise ProviderFailure("MODEL_INVALID_RESPONSE", True) from exc
+                    if pending_data:
+                        data = "\n".join(pending_data)
+                        if data == "[DONE]":
+                            saw_done = True
+                    if finish_reason not in {"stop", "tool_calls"} or not saw_done:
+                        raise ProviderFailure("MODEL_INVALID_RESPONSE", True)
+                    if finish_reason == "tool_calls" and not call_parts:
+                        raise ProviderFailure("MODEL_INVALID_RESPONSE", True)
+                    if finish_reason == "stop" and call_parts:
+                        raise ProviderFailure("MODEL_INVALID_RESPONSE", True)
+                    return
             except HTTPError as exc:
                 status = exc.code
-                if status >= 500 and attempt == 0:
+                if status >= 500 and attempt == 0 and not stream_started:
                     continue
                 if status == 401:
                     raise ProviderFailure("MODEL_AUTH_FAILED", False) from None
@@ -191,9 +219,15 @@ class ChatCompletionClient:
                     raise ProviderFailure("MODEL_RATE_LIMITED", True) from None
                 raise ProviderFailure("MODEL_PROVIDER_ERROR", status >= 500) from None
             except (URLError, TimeoutError, OSError) as exc:
-                if attempt == 0:
+                if attempt == 0 and not stream_started:
                     continue
                 raise ProviderFailure("MODEL_UNAVAILABLE", True) from exc
+
+    @staticmethod
+    def _merge_fragment(current: str, fragment: str) -> str:
+        if fragment.startswith(current):
+            return fragment
+        return current + fragment
 
 
 class ChatReportAnalyzer:
