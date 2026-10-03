@@ -5,17 +5,20 @@ export function TaskRow({
   task,
   toggle,
   edit,
+  serverMode = false,
 }: {
   task: Task;
   toggle: (id: string) => void;
   edit?: () => void;
+  serverMode?: boolean;
 }) {
   return (
     <div className={`task-row ${task.done ? "is-done" : ""}`}>
       <button
         className="task-check"
         onClick={() => toggle(task.id)}
-        aria-label={`${task.done ? "恢复待办" : "标记完成"}：${task.title}`}
+        disabled={serverMode && task.done}
+        aria-label={`${task.done ? serverMode ? "已完成" : "恢复待办" : "标记完成"}：${task.title}`}
         aria-pressed={task.done}
       >
         {task.done && <Icon name="check" size={15} />}

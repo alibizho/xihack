@@ -21,7 +21,7 @@ export function ProfilePage({ username, onLoggedOut }: { username: string; onLog
     <header className="profile-intro"><span className="section-kicker">我的 / 设置</span><h1>账号</h1></header>
     <section className="profile-card" aria-label="账号设置">
       <div className="profile-card-head"><span>当前账号</span><strong>{username}</strong></div>
-      <p>语音助理使用此账号。事务列表目前保存在这个浏览器中，尚未同步到服务器。</p>
+      <p>事务与助理对话保存在账号中。原先的浏览器演示事务仍留在本机。</p>
       {error && <p className="profile-message" role="alert">{error}</p>}
       <button className="button button-outline" onClick={signOut} disabled={busy}>{busy ? "正在退出…" : "退出登录"}</button>
     </section>
