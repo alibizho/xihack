@@ -146,6 +146,10 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     setCountdown(3);
     setPhase("countdown");
   }
+  function quit() {
+    setPhase("idle");
+    setElapsed(0);
+  }
   async function analyze(round: Round) {
     if (pendingReviews.has(round.id)) return;
     pendingReviews.add(round.id);
@@ -199,7 +203,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     <div className="difficulty-picker" role="group" aria-label={t("difficultyAria")}>{modes.map((mode) => <button key={mode.id} className={difficulty === mode.id ? "selected" : ""} aria-pressed={difficulty === mode.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setDifficulty(mode.id)}>{mode.name()}</button>)}</div>
     <p className="difficulty-detail" aria-live="polite">{variant === "circle" ? circleDetails[difficulty]() : modes.find((mode) => mode.id === difficulty)?.detail()}</p>
     <section className="training-surface" aria-label={variant === "circle" ? t("circleBoardAria") : t("boardAria")}>
-      <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? fill("nextNumber", { n: target }) : phase === "playing" ? fill("doneCount", { n: target - 1 }) : modes.find((mode) => mode.id === difficulty)?.name()}</span><strong>{formatTime(elapsed)}</strong></div>
+      <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? fill("nextNumber", { n: target }) : phase === "playing" ? fill("doneCount", { n: target - 1 }) : modes.find((mode) => mode.id === difficulty)?.name()}</span><strong>{formatTime(elapsed)}</strong>{(phase === "countdown" || phase === "playing") && <button type="button" className="training-quit" onClick={quit}>{t("quitRound")}</button>}</div>
       {phase !== "idle" && <div className="board-wrap" ref={boardWrap}>
         {variant === "grid" ? <div className={`training-board ${phase === "countdown" ? "is-hidden" : ""}`}>{board.map((number, index) => <button key={number} className={`training-cell ${gridColors[index]} ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} onClick={() => tap(number)} disabled={phase !== "playing"} aria-label={fill("numberAria", { n: number })}>{number}</button>)}</div>
           : <svg className={`circular-board ${phase === "countdown" ? "is-hidden" : ""}`} viewBox="0 0 500 500" role="group" aria-label={t("circleBoardAria")}>

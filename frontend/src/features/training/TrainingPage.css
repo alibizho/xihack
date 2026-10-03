@@ -12,8 +12,10 @@
 .variant-picker button:disabled, .difficulty-picker button:disabled { cursor: default; }
 .difficulty-detail { min-height: 20px; margin: 8px 3px 16px; color: #fffdf5; font-size: 12px; line-height: 1.5; }
 .training-surface { padding: 20px; border: 1px solid #e9ece7; border-radius: 14px; background: var(--paper); box-shadow: 0 12px 32px #28495a25; }
-.training-bar { max-width: 490px; min-height: 42px; margin: 0 auto 15px; display: flex; align-items: center; justify-content: space-between; color: var(--blue-dark); font-size: 14px; }
+.training-bar { max-width: 490px; min-height: 42px; margin: 0 auto 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--blue-dark); font-size: 14px; }
+.training-bar > span { flex: 1; }
 .training-bar strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.training-quit { min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--blue-dark); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .board-wrap { position: relative; width: min(100%, 490px); margin: auto; }
 .training-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; aspect-ratio: 1; }
 .training-board.is-hidden { visibility: hidden; }
@@ -92,10 +94,8 @@
 .round-history-error { width: 100%; margin: -3px 0 12px; color: #9a4f51; font-size: 12px; }
 @media (max-width: 700px) {
   .training-intro { padding: 18px 2px 22px; }
-  .difficulty-picker { gap: 7px; }
-  .difficulty-picker button { min-height: 106px; padding: 11px; }
-  .difficulty-picker strong { font-size: 14px; }
-  .difficulty-picker span { font-size: 10px; }
+  .difficulty-picker { gap: 8px; }
+  .difficulty-picker button { min-height: 48px; padding: 6px; }
   .training-surface { padding: 13px; }
   .training-board { gap: 4px; }
   .training-cell { border-radius: 6px; }
