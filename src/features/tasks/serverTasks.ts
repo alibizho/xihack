@@ -1,5 +1,5 @@
-import { parseDue, type Task, type TaskDraft } from "./mockTasks";
-import type { Due, ServerTask } from "./agentApi";
+import { parseDue, type Task, type TaskDraft } from "./mockTasks.ts";
+import type { Due, ServerTask } from "./agentApi.ts";
 
 export function displayDue(due: Due): string {
   if (!due) return "待安排";
@@ -14,8 +14,8 @@ export function displayDue(due: Due): string {
 export function displayTask(task: ServerTask): Task {
   return {
     id: task.task_id, title: task.title, due: displayDue(task.due), category: task.category || "未分类",
-    importance: task.important ? 10 : 0, urgency: task.urgent ? 10 : 0,
-    importanceReason: task.important ? "重要" : "非重要", urgencyReason: task.urgent ? "紧急" : "非紧急",
+    importance: task.importance, urgency: task.urgency,
+    importanceReason: "已保存的重要度", urgencyReason: "已保存的紧急度",
     done: task.status === "completed",
   };
 }
@@ -34,6 +34,6 @@ export function taskInput(draft: TaskDraft) {
   }
   return {
     title: draft.title.trim(), description: null, category: draft.category.trim() || null, due,
-    important: draft.importance >= 6, urgent: draft.urgency >= 6,
+    importance: draft.importance, urgency: draft.urgency,
   };
 }

@@ -96,7 +96,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
   function updateScore(id: string, axis: "importance" | "urgency", value: number) {
     const task = serverTasks.find((item) => item.task_id === id);
     if (!task) return;
-    void csrf().then((token) => proposeUpdate(task, { [axis === "importance" ? "important" : "urgent"]: value >= 6 }, token)).then(setPendingProposal).catch((reason) => setTaskError((reason as Error).message));
+    void csrf().then((token) => proposeUpdate(task, { [axis]: value }, token)).then(setPendingProposal).catch((reason) => setTaskError((reason as Error).message));
   }
   async function save(task: TaskDraft, _sourceText: string) {
     const current = draft?.edit && serverTasks.find((item) => item.task_id === draft.edit?.id);

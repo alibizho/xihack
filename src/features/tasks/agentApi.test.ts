@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { confirmProposal, getRunProposals, getTaskReport, listTasks, sendMessage, submitTaskReport, withLocalContext } from "./agentApi.ts";
+import { displayTask, taskInput } from "./serverTasks.ts";
+
+test("task scores survive API display and edit conversion", () => {
+  const serverTask = { task_id: "task-1", title: "Submit homework", description: null, category: "学习", due: null, importance: 7.3, urgency: 8.6, status: "open" as const, version: 1 };
+  const displayed = displayTask(serverTask);
+  assert.equal(displayed.importance, 7.3);
+  assert.equal(displayed.urgency, 8.6);
+  assert.deepEqual({ importance: taskInput(displayed).importance, urgency: taskInput(displayed).urgency }, { importance: 7.3, urgency: 8.6 });
+});
 
 test("narrated tasks carry the user's local date for relative deadlines", async () => {
   const original = globalThis.fetch;

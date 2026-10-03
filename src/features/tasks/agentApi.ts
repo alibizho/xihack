@@ -3,7 +3,7 @@ import { api, post } from "../../shared/api.ts";
 export type Due = { precision: "date"; date: string; timezone: string } | { precision: "minute"; at: string; timezone: string } | null;
 export type ServerTask = {
   task_id: string; title: string; description: string | null; category: string | null;
-  due: Due; important: boolean; urgent: boolean; status: "open" | "completed"; version: number;
+  due: Due; importance: number; urgency: number; status: "open" | "completed"; version: number;
 };
 export type Proposal = {
   proposal_id: string; operation: "create" | "update" | "complete" | "delete";

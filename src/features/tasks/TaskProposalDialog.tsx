@@ -7,6 +7,7 @@ export function TaskProposalDialog({ proposal, taskTitle, onClose, onConfirmed, 
   const key = useRef(crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const details = proposal.task || proposal.changes;
   useEffect(() => { dialog.current?.showModal(); }, []);
 
   async function decide(accept: boolean) {
@@ -28,6 +29,7 @@ export function TaskProposalDialog({ proposal, taskTitle, onClose, onConfirmed, 
     <span className="section-kicker">最后一步</span>
     <h2 id="task-proposal-title">确认{proposal.operation === "create" ? "添加" : proposal.operation === "complete" ? "完成" : "修改"}事务</h2>
     <p className="review-intro">{proposal.task?.title || proposal.changes?.title || taskTitle || "请核对这次操作"}</p>
+    {details && (typeof details.importance === "number" || typeof details.urgency === "number") && <p className="review-intro">{typeof details.importance === "number" && `重要度 ${details.importance.toFixed(1)} / 10`}{typeof details.importance === "number" && typeof details.urgency === "number" && " · "}{typeof details.urgency === "number" && `紧急度 ${details.urgency.toFixed(1)} / 10`}</p>}
     <p className="composer-footnote">只有确认后才会写入账号。</p>
     {error && <p className="field-error" role="alert">{error}</p>}
     <div className="composer-actions"><button className="button button-outline" disabled={busy} onClick={() => void decide(false)}>取消</button><button className="button button-primary" disabled={busy} onClick={() => void decide(true)}>{busy ? "处理中…" : "确认写入"}</button></div>

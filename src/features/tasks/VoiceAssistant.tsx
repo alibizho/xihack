@@ -259,8 +259,8 @@ export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, on
           {task && <dl className="voice-proposal-details">
             {(proposal.operation === "create" || task.due !== undefined) && <><dt>截止</dt><dd>{dueLabel(task.due)}</dd></>}
             {(proposal.operation === "create" || task.category !== undefined) && <><dt>分类</dt><dd>{task.category || "未分类"}</dd></>}
-            {typeof task.important === "boolean" && <><dt>重要</dt><dd>{task.important ? "是" : "否"}</dd></>}
-            {typeof task.urgent === "boolean" && <><dt>紧急</dt><dd>{task.urgent ? "是" : "否"}</dd></>}
+            {typeof task.importance === "number" && <><dt>重要度</dt><dd>{task.importance.toFixed(1)} / 10</dd></>}
+            {typeof task.urgency === "number" && <><dt>紧急度</dt><dd>{task.urgency.toFixed(1)} / 10</dd></>}
           </dl>}
           {proposal.status === "pending" ? <div className="voice-proposal-actions"><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>取消</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>确认写入</button></div> : <small>{proposal.status === "confirmed" ? "已确认" : "已取消"}</small>}
         </article>;
