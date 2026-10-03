@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: shixu
+      POSTGRES_USER: shixu
+      POSTGRES_PASSWORD: local-dev-password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shixu -d shixu"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  api:
+    build: .
+    image: shixu-backend-local
+    environment: &app_env
+      APP_ENV: development
+      APP_ORIGIN: ${LOCAL_APP_ORIGIN:-http://localhost:8000}
+      DATABASE_URL: postgresql+psycopg://shixu:local-dev-password@db:5432/shixu
+      CSRF_SECRET: ${CSRF_SECRET:-local-development-csrf-secret-change-me}
+      MIMO_API_KEY: ${MIMO_API_KEY:-}
+    command: sh -c "alembic upgrade head && uvicorn assistant_backend.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "127.0.0.1:${LOCAL_API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    image: shixu-backend-local
+    profiles: [agent]
+    environment: *app_env
+    command: python -m assistant_backend.worker
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

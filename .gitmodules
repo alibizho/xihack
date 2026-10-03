@@ -1,4 +1,0 @@
-[submodule "backend"]
-	path = backend
-	url = https://github.com/yassay1/shixu-backend.git
-	branch = main

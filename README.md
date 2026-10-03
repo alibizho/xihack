@@ -7,13 +7,13 @@ Mobile-first React, TypeScript, and Vite web app for voice-first task capture an
 Requires Node.js 22 or newer.
 
 ```bash
-git clone --recurse-submodules https://github.com/alibizho/xihack.git
+git clone https://github.com/alibizho/xihack.git
 cd xihack
 npm ci
 npm run dev
 ```
 
-The backend lives in the `backend/` Git submodule. See its README for local database setup, then set `BACKEND_URL` in `.env.local` when using account features. The browser-only task demo runs without the backend. If you already cloned the repository, run `git submodule update --init --recursive`.
+The backend source lives in `backend/`. See its README for local database setup, then set `BACKEND_URL` in `.env.local` when using account features. The browser-only task demo runs without the backend.
 
 Open the local URL printed by Vite. To test from a phone on the same network, run `npm run dev -- --host 0.0.0.0`; microphone and camera access require a secure context outside localhost.
 
@@ -29,7 +29,7 @@ npm test
 - **Today and tasks:** browser demo data remains local; signed-in users can fetch account tasks and confirm backend task proposals. Importance and urgency use yes/no in account mode.
 - **Voice:** browser speech recognition produces text; signed-in users can send that text for backend intent and time calibration. Raw audio is not uploaded by this flow.
 - **Training:** a three-level 5×5 Schulte game with local records and saved per-round MiMo feedback. Reviews can be reopened from training history.
-- **Account and assistant:** registration, sign-in, conversations, and Agent runs are connected to the backend. Task-related Agent tool calls currently fail with MiMo's incomplete streamed tool arguments; see [the handoff note](docs/backend-agent-handoff.md).
+- **Account and assistant:** registration, sign-in, conversations, and Agent runs are connected to the backend. The MiMo tool-call fix has passed isolated model and database checks; production deployment and account verification remain, see [the handoff note](docs/backend-agent-handoff.md).
 
 The target behavior is described in [PRD v1.0](docs/PRD_v1.0.pdf), with the narrower hackathon scope in [frontend plan](docs/frontend-plan.md). Integration and deployment details are in [the integration guide](docs/shixu-integration.md).
 
@@ -42,13 +42,13 @@ The target behavior is described in [PRD v1.0](docs/PRD_v1.0.pdf), with the narr
 | `src/features/tasks/` | Task UI and mock task behavior |
 | `src/features/training/` | Training contributor's page and styles |
 | `src/shared/` | Reusable UI primitives only |
-| `backend/` | Teammate 2's independent backend repository, pinned as a Git submodule |
+| `backend/` | Backend source imported from [yassay1/shixu-backend](https://github.com/yassay1/shixu-backend), with integration fixes |
 | `server/`, `deploy/` | Node API gateway, training review endpoint, and Alibaba Cloud deployment |
 | `docs/` | Product scope and plans |
 
 Each feature imports its own CSS. Keep feature state and styles in its folder; put code in `src/shared/` only when two features actually use it. The training contributor can replace `TrainingPage.tsx` and `TrainingPage.css` without touching the task flow.
 
-Backend changes should be made in its own repository. To take a new backend release, update the `backend/` submodule commit, review it, and commit the pointer in this repository before deployment.
+Backend source was imported from `yassay1/shixu-backend` commit `1c0e28d`. Review upstream changes and merge them into `backend/` before deployment; this repository contains the full deployable source.
 
 ## Contributing
 

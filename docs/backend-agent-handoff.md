@@ -1,5 +1,7 @@
 # 事务 Agent 联调记录
 
+> 2026-10-03 更新：以下内容记录旧版本的故障。修复代码已纳入本仓库 `backend/`：可选工具参数不再使用可空 schema；provider 只接受 MiMo 的结构化 `message.tool_calls`，并阻止原始工具标记进入回答；对话可通过 `/api/conversations/{conversation_id}/proposal-ids` 恢复待确认提案。隔离环境的真实 MiMo 查询与提案循环、PostgreSQL 49 项测试已通过。正式站点更新与账号联调仍待完成，详见 [修复交接](../backend/docs/mimo-agent-repair-2026-10-03.md)。
+
 日期：2026-10-02。后端部署使用 `yassay1/shixu-backend` 的 `1c0e28d`，模型为 `mimo-v2.6-flash`。本文仅记录联调证据，没有改动同学 2 的后端源码。
 
 ## 已通过
