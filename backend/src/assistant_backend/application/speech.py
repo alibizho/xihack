@@ -3,10 +3,14 @@
 import hashlib
 import hmac
 import io
+import base64
+import json
 import multiprocessing
 import re
 import unicodedata
 import wave
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -44,7 +48,7 @@ def _transcribe_in_child(model_path: str, samples: bytes, connection: Connection
 
         model = WhisperModel(model_path, device="cpu", compute_type="int8", local_files_only=True)
         audio = np.frombuffer(samples, dtype="<i2").astype(np.float32) / 32768.0
-        segments, _ = model.transcribe(audio, language="zh", beam_size=3)
+        segments, _ = model.transcribe(audio, language=None, beam_size=3)
         connection.send((True, "".join(segment.text for segment in segments).strip()))
     except Exception:
         connection.send((False, ""))
@@ -93,6 +97,58 @@ class LocalWhisperTranscriber:
                     process.kill()
             if started:
                 process.join(timeout=2)
+
+
+class MimoAsrTranscriber:
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    def transcribe(self, wav: bytes) -> str:
+        key = self.settings.mimo_api_key
+        if key is None or not key.get_secret_value():
+            raise SpeechFailure("TRANSCRIPTION_UNAVAILABLE", 503, "Speech recognition unavailable")
+        payload = {
+            "model": "mimo-v2.5-asr",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": "data:audio/wav;base64,"
+                                + base64.b64encode(wav).decode("ascii")
+                            },
+                        }
+                    ],
+                }
+            ],
+            "asr_options": {"language": "auto"},
+        }
+        request = Request(
+            f"{self.settings.mimo_base_url}/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"api-key": key.get_secret_value(), "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=45) as response:
+                result = json.load(response)
+                text = result["choices"][0]["message"]["content"]
+                if not isinstance(text, str):
+                    raise ValueError("Invalid transcript")
+                return text.strip()
+        except (
+            HTTPError,
+            URLError,
+            TimeoutError,
+            OSError,
+            KeyError,
+            IndexError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise SpeechFailure("TRANSCRIPTION_FAILED", 503, "Speech recognition failed") from exc
 
 
 def _calendar_date(text: str, now: datetime) -> tuple[str | None, bool]:
@@ -235,13 +291,25 @@ class SpeechService:
         self.factory = factory
         self.settings = settings
         self.transcriber = transcriber or LocalWhisperTranscriber(settings.speech_model_path)
+        self.mimo_transcriber = MimoAsrTranscriber(settings)
 
     def audio_fallback(
         self, user_id: str, ip_address: str, data: bytes, timezone_name: str
     ) -> dict:
         samples = validate_wav(data)
         self._consume_limits(user_id, ip_address)
-        transcript = self.transcriber.transcribe(samples)
+        try:
+            transcript = self.transcriber.transcribe(samples)
+        except SpeechFailure as exc:
+            if exc.code not in {
+                "TRANSCRIPTION_UNAVAILABLE",
+                "TRANSCRIPTION_FAILED",
+                "TRANSCRIPTION_TIMEOUT",
+            }:
+                raise
+            transcript = self.mimo_transcriber.transcribe(data)
+        if not transcript:
+            transcript = self.mimo_transcriber.transcribe(data)
         if not transcript:
             raise SpeechFailure("TRANSCRIPTION_FAILED", 422, "No speech recognized")
         return calibrate(transcript, timezone_name)
@@ -249,8 +317,8 @@ class SpeechService:
     def _consume_limits(self, user_id: str, ip_address: str) -> None:
         now = datetime.now(timezone.utc)
         windows = (
-            ("speech_user_day", user_id, 86400, 5),
-            ("speech_ip_day", ip_address, 86400, 20),
+            ("speech_user_day", user_id, 86400, 20),
+            ("speech_ip_day", ip_address, 86400, 60),
             ("speech_global_minute", "global", 60, 10),
         )
         table = AuthRateLimit.__table__

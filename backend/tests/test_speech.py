@@ -166,7 +166,7 @@ def test_audio_fallback_requires_consent_and_validates_format_and_limits(
     assert response.status_code == 200
     assert response.json()["intent"] == "create"
     assert response.json()["due"]["precision"] == "date"
-    for _ in range(4):
+    for _ in range(9):
         assert client.post(path, content=_wav(), headers=headers).status_code == 200
     assert client.post(path, content=_wav(), headers=headers).json()["code"] == "RATE_LIMITED"
     engine = create_engine(DATABASE_URL)

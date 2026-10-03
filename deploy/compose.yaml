@@ -7,6 +7,7 @@ x-backend-environment: &backend-environment
   MIMO_API_KEY: ${BACKEND_MIMO_API_KEY:?Set BACKEND_MIMO_API_KEY in the server .env file}
   MIMO_BASE_URL: https://api.xiaomimimo.com/v1
   MIMO_MODEL: mimo-v2.6-flash
+  SPEECH_MODEL_PATH: /opt/models/faster-whisper-base
 
 services:
   db:

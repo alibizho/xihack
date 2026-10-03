@@ -1,26 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
-import { calibrate as calibrateSpeech, cancelProposal, confirmProposal, createConversation, csrf, getRun, getRunProposals, sendMessage, withLocalContext, type Due, type Proposal } from "./agentApi";
+import { cancelProposal, confirmProposal, createConversation, csrf, getRun, getRunProposals, sendMessage, transcribeAudio, withLocalContext, type Due, type Proposal } from "./agentApi";
+import { startAudioCapture, type AudioCapture } from "./audioCapture";
 import "./TaskComposer.css";
 
-type Recognition = {
-  lang: string;
-  processLocally: boolean;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-};
-type RecognitionClass = {
-  new (): Recognition;
-  available?: (options: { langs: string[]; processLocally: true }) => Promise<string>;
-  install?: (options: { langs: string[]; processLocally: true }) => Promise<boolean>;
-};
 type Message = { role: "user" | "assistant"; text: string };
 
 function dueParts(due: Due | undefined) {
@@ -33,28 +17,17 @@ function dueParts(due: Due | undefined) {
   };
 }
 
-function speechRecognition(): RecognitionClass | undefined {
-  const browser = window as Window & { SpeechRecognition?: RecognitionClass; webkitSpeechRecognition?: RecognitionClass };
-  return browser.SpeechRecognition || browser.webkitSpeechRecognition;
-}
-
 export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
   const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
-  const recognition = useRef<Recognition | null>(null);
-  const keepListening = useRef(false);
+  const capture = useRef<AudioCapture | null>(null);
+  const recordingTimer = useRef<number | null>(null);
   const active = useRef(true);
   const sessionId = useRef(0);
   const conversationId = useRef("");
   const conversationRequestId = useRef(crypto.randomUUID());
   const pendingMessage = useRef({ content: "", payload: "", id: "", shown: false });
-  const calibrationId = useRef(0);
-  const calibrationTask = useRef<Promise<void>>(Promise.resolve());
   const inputRef = useRef("");
-  const recognitionBase = useRef("");
-  const lastFinalText = useRef("");
-  const sendOnEnd = useRef(false);
-  const browserServiceEnabled = useRef(false);
   const openedFromButton = useRef(false);
   const confirmKeys = useRef(new Map<string, string>());
   const [input, setInput] = useState("");
@@ -63,11 +36,8 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
   const [clarification, setClarification] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [calibrating, setCalibrating] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [listening, setListening] = useState(false);
-  const [browserChoice, setBrowserChoice] = useState(false);
-  const [language, setLanguage] = useState(() => navigator.language.toLowerCase().startsWith("en") ? "en-US" : "zh-CN");
 
   useEffect(() => {
     if (!expanded) return;
@@ -78,24 +48,20 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     if (initialText) {
       inputRef.current = initialText;
       setInput(initialText);
-      void send();
-    } else if (!fromButton) void record(session, browserServiceEnabled.current);
-    const stop = () => { if (document.hidden) { keepListening.current = false; sendOnEnd.current = false; recognition.current?.stop(); } };
+    } else if (!fromButton) void record(session);
+    const stop = () => { if (document.hidden) { clearRecordingTimer(); const current = capture.current; capture.current = null; if (current) void current.cancel(); setListening(false); } };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     document.addEventListener("visibilitychange", stop);
     document.addEventListener("keydown", escape);
     return () => {
       active.current = false;
       sessionId.current++;
-      calibrationId.current++;
-      keepListening.current = false;
-      sendOnEnd.current = false;
-      const current = recognition.current;
-      recognition.current = null;
-      if (current) { current.onresult = null; current.onerror = null; current.onstart = null; current.onend = null; current.stop(); }
+      clearRecordingTimer();
+      const current = capture.current;
+      capture.current = null;
+      if (current) void current.cancel();
       setPreparing(false);
       setListening(false);
-      setCalibrating(false);
       setBusy(false);
       document.removeEventListener("visibilitychange", stop);
       document.removeEventListener("keydown", escape);
@@ -106,104 +72,59 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
 
   useEffect(() => { messageEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages, input, busy]);
 
-  async function calibrate(text: string, requestId: number) {
-    try {
-      const draft = await calibrateSpeech(text, await csrf());
-      if (active.current && requestId === calibrationId.current) {
-        if (inputRef.current === text) { inputRef.current = draft.draft_text; setInput(draft.draft_text); }
-        setClarification(draft.needs_clarification ? draft.clarification || "请检查识别结果" : "");
-      }
-    } catch (reason) {
-      if (!active.current || requestId !== calibrationId.current) return;
-      if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
-      else setError((reason as Error).message);
-    } finally { if (active.current && requestId === calibrationId.current) setCalibrating(false); }
-  }
-
   function openAndRecord() {
     active.current = true;
     openedFromButton.current = true;
     const session = ++sessionId.current;
     onOpen();
-    void record(session, browserServiceEnabled.current);
+    void record(session);
   }
 
   function toggleRecord() {
-    if (!keepListening.current) { void record(sessionId.current, browserServiceEnabled.current); return; }
-    keepListening.current = false;
-    sendOnEnd.current = true;
-    setPreparing(true);
-    if (recognition.current) recognition.current.stop();
-    else { sendOnEnd.current = false; setPreparing(false); void calibrationTask.current.then(() => send()); }
+    if (capture.current) void finishRecording(sessionId.current);
+    else void record(sessionId.current);
   }
 
-  async function record(session = sessionId.current, useBrowserService = false) {
-    if (recognition.current) return;
-    const SpeechRecognition = speechRecognition();
-    if (!SpeechRecognition) { setError("此浏览器不支持语音识别，请改用文字输入"); return; }
+  function clearRecordingTimer() {
+    if (recordingTimer.current !== null) window.clearTimeout(recordingTimer.current);
+    recordingTimer.current = null;
+  }
+
+  async function record(session = sessionId.current) {
+    if (capture.current) return;
     setPreparing(true);
     setError("");
-    let started = false;
     try {
-      if (!useBrowserService) {
-        if (!SpeechRecognition.available || !SpeechRecognition.install) { setBrowserChoice(true); return; }
-      }
-      if (!active.current || session !== sessionId.current) return;
-      const next = new SpeechRecognition();
-      next.lang = language;
-      if (!useBrowserService) next.processLocally = true;
-      next.continuous = true;
-      next.interimResults = true;
-      recognitionBase.current = inputRef.current.trim() ? `${inputRef.current.trim()} ` : "";
-      lastFinalText.current = "";
-      sendOnEnd.current = false;
-      keepListening.current = true;
-      next.onstart = () => { if (active.current && session === sessionId.current) { setPreparing(false); setListening(true); } };
-      next.onresult = (event) => {
-        if (!active.current || session !== sessionId.current) return;
-        let final = "";
-        let interim = "";
-        for (let index = 0; index < event.results.length; index++) {
-          const part = event.results[index];
-          if (part.isFinal) final += part[0].transcript;
-          else interim += part[0].transcript;
-        }
-        const full = `${recognitionBase.current}${final}${interim}`.trim();
-        inputRef.current = full;
-        setInput(full);
-        if (final && final !== lastFinalText.current) {
-          lastFinalText.current = final;
-          const requestId = ++calibrationId.current;
-          setCalibrating(true);
-          calibrationTask.current = calibrate(`${recognitionBase.current}${final}`.trim(), requestId);
-        }
-      };
-      next.onerror = (event) => {
-        if (!active.current || session !== sessionId.current) return;
-        setPreparing(false);
-        if (event.error === "no-speech" || (event.error === "aborted" && !keepListening.current)) return;
-        keepListening.current = false;
-        if (!useBrowserService && (event.error === "language-not-supported" || event.error === "service-not-allowed")) setBrowserChoice(true);
-        else if (active.current) setError(event.error === "not-allowed" ? "请允许麦克风权限，或改用文字输入" : "识别失败，请重试或改用文字输入");
-      };
-      next.onend = () => {
-        if (!active.current || session !== sessionId.current) return;
-        recognition.current = null;
-        setPreparing(false);
-        setListening(false);
-        if (sendOnEnd.current) {
-          sendOnEnd.current = false;
-          void calibrationTask.current.then(() => send());
-        } else if (keepListening.current && !document.hidden) window.setTimeout(() => { if (active.current && session === sessionId.current && keepListening.current && !recognition.current) void record(session, useBrowserService); }, 150);
-      };
-      recognition.current = next;
-      next.start();
-      started = true;
+      const started = await startAudioCapture();
+      if (!active.current || session !== sessionId.current) { await started.cancel(); return; }
+      capture.current = started;
+      setListening(true);
+      recordingTimer.current = window.setTimeout(() => void finishRecording(session), 18_000);
     } catch (reason) {
-      recognition.current = null;
-      keepListening.current = false;
       if (active.current && session === sessionId.current) setError((reason as Error).message || "无法开始录音，请改用文字输入");
-    } finally { if (!started && active.current && session === sessionId.current) setPreparing(false); }
+    } finally { if (active.current && session === sessionId.current) setPreparing(false); }
+  }
+
+  async function finishRecording(session: number) {
+    const current = capture.current;
+    if (!current) return;
+    capture.current = null;
+    clearRecordingTimer();
+    setListening(false);
+    setPreparing(true);
+    try {
+      const audio = await current.stop();
+      const draft = await transcribeAudio(audio, await csrf());
+      if (!active.current || session !== sessionId.current) return;
+      const text = `${inputRef.current.trim()} ${draft.draft_text}`.trim();
+      inputRef.current = text;
+      setInput(text);
+      setClarification(draft.needs_clarification ? draft.clarification || "请检查识别结果" : "");
+    } catch (reason) {
+      if (!active.current || session !== sessionId.current) return;
+      if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
+      else setError((reason as Error).message || "转写失败，请重试或使用文字输入");
+    } finally { if (active.current && session === sessionId.current) setPreparing(false); }
   }
 
   async function send() {
@@ -213,7 +134,6 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     if (content.length > 8000) { setError("内容不能超过 8000 字"); return; }
     setBusy(true);
     setError("");
-    calibrationId.current++;
     try {
       const token = await csrf();
       if (session !== sessionId.current) return;
@@ -278,13 +198,12 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
 
   return <div className={`voice-capture ${expanded ? "is-open" : ""}`}>
     {expanded && <button className="voice-close" type="button" onClick={close} aria-label="收起语音助理"><Icon name="close" size={18} /></button>}
-    <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening || keepListening.current ? "结束录音并发送" : "再次开始录音" : "打开语音助理并开始聆听"}>
+    <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening ? "结束录音并转写" : "开始录音" : "打开语音助理并开始录音"}>
       <span className={`voice-orb ${expanded ? "voice-orb-active" : ""} ${preparing || listening ? "voice-orb-listening" : ""}`}><Icon name="mic" size={31} /></span>
-      <strong id="capture-title">{expanded ? preparing ? "正在开启麦克风…" : listening || keepListening.current ? "正在聆听 · 点按结束" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
+      <strong id="capture-title">{expanded ? preparing ? "正在处理录音…" : listening ? "正在录音 · 点按结束" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
-    {browserChoice && <div className="voice-chat-note" role="status"><p>本地语音识别不可用。浏览器语音识别可能将音频发送给浏览器服务商处理。</p><button type="button" className="button button-primary" onClick={() => { browserServiceEnabled.current = true; setBrowserChoice(false); void record(); }}>使用浏览器语音识别</button></div>}
-    {browserServiceEnabled.current && !browserChoice && <p className="voice-chat-note">正在使用浏览器语音识别，音频可能由浏览器服务商处理。</p>}
+    <p className="voice-chat-note">录音优先由服务器本地模型转写，失败时调用 MiMo。最多录制 18 秒；请检查文字后手动发送。</p>
     {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
       {proposals.map((proposal, index) => {
@@ -306,13 +225,11 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       <div ref={messageEnd} />
     </div>}
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-    <label className="field-label" htmlFor="voice-language">识别语言</label>
-    <select id="voice-language" className="form-input" value={language} disabled={keepListening.current || preparing || busy} onChange={(event) => setLanguage(event.target.value)}><option value="zh-CN">中文</option><option value="en-US">English</option></select>
     <label className="field-label" htmlFor="voice-input">对话内容（可修改）</label>
-    <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { calibrationId.current++; setCalibrating(false); inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder="说出或输入你想问的事" />
+    <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder="说出或输入你想问的事" />
     {clarification && <p className="voice-chat-note" role="status">{clarification}</p>}
     {error && <p className="field-error" role="alert">{error}</p>}
-    <button className="button button-primary full-width" type="submit" disabled={busy || listening || preparing || calibrating || !input.trim()}>{busy ? "正在处理…" : "发送给助理"}</button>
+    <button className="button button-primary full-width" type="submit" disabled={busy || listening || preparing || !input.trim()}>{busy ? "正在处理…" : "发送给助理"}</button>
     </form>
     <p className="composer-footnote">事务变更仍需逐项确认。也可以问「我该先做哪件事？」</p>
     </div></div>
