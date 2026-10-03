@@ -28,11 +28,13 @@ function localRecognition(): RecognitionClass | undefined {
   return recognition?.available && recognition.install ? recognition : undefined;
 }
 
-export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { username: string; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
+  const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const recognition = useRef<Recognition | null>(null);
+  const keepListening = useRef(false);
   const active = useRef(true);
+  const sessionId = useRef(0);
   const conversationId = useRef("");
   const conversationRequestId = useRef(crypto.randomUUID());
   const pendingMessage = useRef({ content: "", id: "", shown: false });
@@ -54,17 +56,33 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
   const [listening, setListening] = useState(false);
 
   useEffect(() => {
-    dialog.current?.showModal();
-    void record();
-    const stop = () => { if (document.hidden) { sendOnEnd.current = false; recognition.current?.stop(); } };
+    if (!expanded) return;
+    active.current = true;
+    const session = ++sessionId.current;
+    void record(session);
+    const stop = () => { if (document.hidden) { keepListening.current = false; sendOnEnd.current = false; recognition.current?.stop(); } };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     document.addEventListener("visibilitychange", stop);
+    document.addEventListener("keydown", escape);
     return () => {
       active.current = false;
+      sessionId.current++;
+      calibrationId.current++;
+      keepListening.current = false;
       sendOnEnd.current = false;
-      recognition.current?.stop();
+      const current = recognition.current;
+      recognition.current = null;
+      if (current) { current.onresult = null; current.onerror = null; current.onend = null; current.stop(); }
+      setPreparing(false);
+      setListening(false);
+      setCalibrating(false);
+      setBusy(false);
       document.removeEventListener("visibilitychange", stop);
+      document.removeEventListener("keydown", escape);
     };
-  }, []);
+  }, [expanded]);
+
+  function close() { orbButton.current?.focus(); onClose(); }
 
   useEffect(() => { messageEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages, input, busy]);
 
@@ -82,8 +100,8 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
     } finally { if (active.current && requestId === calibrationId.current) setCalibrating(false); }
   }
 
-  async function record() {
-    if (recognition.current) { sendOnEnd.current = true; recognition.current.stop(); return; }
+  async function record(session = sessionId.current) {
+    if (recognition.current) { keepListening.current = false; sendOnEnd.current = true; recognition.current.stop(); return; }
     const SpeechRecognition = localRecognition();
     if (!SpeechRecognition) { setError("此浏览器不支持本地语音识别，请改用文字输入"); return; }
     setPreparing(true);
@@ -94,7 +112,7 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
       if (state === "downloadable" || state === "downloading") {
         if (!await SpeechRecognition.install!(options)) throw new Error("中文语音模型安装失败，请改用文字输入");
       } else if (state !== "available") throw new Error("本地中文语音识别不可用，请改用文字输入");
-      if (!active.current) return;
+      if (!active.current || session !== sessionId.current) return;
       const next = new SpeechRecognition();
       next.lang = "zh-CN";
       next.processLocally = true;
@@ -103,6 +121,7 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
       recognitionBase.current = inputRef.current.trim() ? `${inputRef.current.trim()} ` : "";
       lastFinalText.current = "";
       sendOnEnd.current = false;
+      keepListening.current = true;
       next.onresult = (event) => {
         if (!active.current) return;
         let final = "";
@@ -122,7 +141,11 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
           calibrationTask.current = calibrate(`${recognitionBase.current}${final}`.trim(), requestId);
         }
       };
-      next.onerror = (event) => { if (active.current) setError(event.error === "not-allowed" ? "请允许麦克风权限，或改用文字输入" : "识别失败，请重试或改用文字输入"); };
+      next.onerror = (event) => {
+        if (event.error === "no-speech" || (event.error === "aborted" && !keepListening.current)) return;
+        keepListening.current = false;
+        if (active.current) setError(event.error === "not-allowed" ? "请允许麦克风权限，或改用文字输入" : "识别失败，请重试或改用文字输入");
+      };
       next.onend = () => {
         recognition.current = null;
         if (!active.current) return;
@@ -130,18 +153,20 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
         if (sendOnEnd.current) {
           sendOnEnd.current = false;
           void calibrationTask.current.then(() => send());
-        }
+        } else if (keepListening.current && !document.hidden) void record(session);
       };
       recognition.current = next;
       next.start();
       setListening(true);
     } catch (reason) {
       recognition.current = null;
-      if (active.current) setError((reason as Error).message || "无法开始录音，请改用文字输入");
-    } finally { if (active.current) setPreparing(false); }
+      keepListening.current = false;
+      if (active.current && session === sessionId.current) setError((reason as Error).message || "无法开始录音，请改用文字输入");
+    } finally { if (active.current && session === sessionId.current) setPreparing(false); }
   }
 
   async function send() {
+    const session = sessionId.current;
     const content = inputRef.current.trim();
     if (!content) { setError("请先说出或输入内容"); return; }
     if (content.length > 8000) { setError("内容不能超过 8000 字"); return; }
@@ -150,12 +175,15 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
     calibrationId.current++;
     try {
       const token = await csrf();
+      if (session !== sessionId.current) return;
       if (!conversationId.current) {
         const conversation = await createConversation(token, conversationRequestId.current);
         conversationId.current = conversation.conversation_id;
       }
+      if (session !== sessionId.current) return;
       if (pendingMessage.current.content !== content) pendingMessage.current = { content, id: crypto.randomUUID(), shown: false };
       const { run_id } = await sendMessage(conversationId.current, content, pendingMessage.current.id, token);
+      if (session !== sessionId.current) return;
       if (!pendingMessage.current.shown) {
         setMessages((current) => [...current, { role: "user", text: content }]);
         pendingMessage.current.shown = true;
@@ -163,8 +191,9 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
       setInput("");
       inputRef.current = "";
       setClarification("");
-      for (let attempt = 0; attempt < 120 && active.current; attempt++) {
+      for (let attempt = 0; attempt < 120 && active.current && session === sessionId.current; attempt++) {
         const run = await getRun(run_id);
+        if (session !== sessionId.current) return;
         if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
           const found = await getRunProposals(run_id);
           setProposals((current) => [...current, ...found]);
@@ -180,13 +209,13 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
-      if (active.current) throw new Error("等待回复超时，请稍后重试");
+      if (active.current && session === sessionId.current) throw new Error("等待回复超时，请稍后重试");
     } catch (reason) {
-      if (active.current) {
+      if (active.current && session === sessionId.current) {
         if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
         else { inputRef.current = content; setInput(content); setError((reason as Error).message); }
       }
-    } finally { if (active.current) setBusy(false); }
+    } finally { if (active.current && session === sessionId.current) setBusy(false); }
   }
 
   async function decide(proposal: Proposal, accept: boolean) {
@@ -206,21 +235,26 @@ export function VoiceAssistant({ username, onClose, onSessionExpired, onTasksCha
     finally { setBusy(false); }
   }
 
-  return <dialog ref={dialog} className="composer voice-chat" onClose={onClose} aria-labelledby="voice-title">
-    <div className="composer-head"><div><span className="section-kicker">语音助理</span><h2 id="voice-title">问助理一件事</h2></div><button className="icon-button" onClick={() => dialog.current?.close()} aria-label="关闭"><Icon name="close" /></button></div>
-    <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
+  return <div className={`voice-capture ${expanded ? "is-open" : ""}`}>
+    {expanded && <button className="voice-close" type="button" onClick={close} aria-label="收起语音助理"><Icon name="close" size={18} /></button>}
+    <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? () => void record() : onOpen} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening ? "结束录音并发送" : "再次开始录音" : "打开语音助理并开始聆听"}>
+      <span className={`voice-orb ${expanded ? "voice-orb-active" : ""} ${preparing || listening ? "voice-orb-listening" : ""}`}><Icon name="mic" size={31} /></span>
+      <strong id="capture-title">{expanded ? preparing ? "正在开启麦克风…" : listening ? "正在聆听 · 点按结束" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
+    </button>
+    <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
+    {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
       {proposals.map((proposal) => <div className="voice-proposal" key={proposal.proposal_id}><strong>{proposal.operation === "create" ? "新建事务" : proposal.operation === "complete" ? "完成事务" : proposal.operation === "delete" ? "删除事务" : "修改事务"}</strong><p>{proposal.task?.title || proposal.changes?.title || proposal.task_id}</p>{proposal.status === "pending" ? <div><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>取消</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>确认写入</button></div> : <small>{proposal.status === "confirmed" ? "已确认" : "已取消"}</small>}</div>)}
-      {input && <p className="voice-chat-bubble user" aria-live="off">{input}</p>}
-      <p className="voice-chat-bubble assistant">{preparing ? "正在准备本地语音识别…" : listening ? "正在听，请说话…" : calibrating ? "正在校准识别文字…" : busy ? "正在处理你的请求…" : "说出或输入你想问的事。"}</p>
       <div ref={messageEnd} />
-    </div>
-    <button className={`record-button ${listening ? "recording" : ""}`} onClick={() => void record()} disabled={busy || preparing} aria-label={listening ? "结束录音并发送" : "开始录音"}><Icon name="mic" size={19} />{preparing ? "准备中…" : listening ? "结束并发送" : "再次录音"}</button>
+    </div>}
+    <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
     <label className="field-label" htmlFor="voice-input">识别到的文字（可修改）</label>
     <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { calibrationId.current++; setCalibrating(false); inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder="说出或输入你想问的事" />
     {clarification && <p className="voice-chat-note" role="status">{clarification}</p>}
     {error && <p className="field-error" role="alert">{error}</p>}
-    <button className="button button-primary full-width" onClick={() => void send()} disabled={busy || listening || preparing || calibrating}>{busy ? "正在处理…" : "发送给助理"}</button>
-    <p className="composer-footnote">已登录：{username}。录音文字发送给助理后，事务变更仍需逐项确认。也可以问「我该先做哪件事？」</p>
-  </dialog>;
+    <button className="button button-primary full-width" type="submit" disabled={busy || listening || preparing || calibrating || !input.trim()}>{busy ? "正在处理…" : "发送给助理"}</button>
+    </form>
+    <p className="composer-footnote">事务变更仍需逐项确认。也可以问「我该先做哪件事？」</p>
+    </div></div>
+  </div>;
 }

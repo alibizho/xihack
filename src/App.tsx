@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { localDate, type Task, type TaskDraft } from "./features/tasks/mockTasks";
 import { Icon, type IconName } from "./shared/Icon";
 import { TaskComposer } from "./features/tasks/TaskComposer";
-import { VoiceAssistant } from "./features/tasks/VoiceAssistant";
 import { TodayPage } from "./features/today/TodayPage";
 import { TasksPage } from "./features/tasks/TasksPage";
 import { TrainingPage } from "./features/training/TrainingPage";
@@ -16,7 +15,7 @@ import { TaskProposalDialog } from "./features/tasks/TaskProposalDialog";
 import { TaskReportDialog } from "./features/tasks/TaskReportDialog";
 
 type Page = "today" | "tasks" | "training" | "profile";
-type Draft = { voice?: boolean; text?: string; edit?: Task };
+type Draft = { text?: string; edit?: Task };
 export type Capture = { id: string; input: string; title: string; time: string; edited: boolean };
 const pages: Page[] = ["today", "tasks", "training", "profile"];
 const labels: Record<Page, string> = { today: "今天", tasks: "事务", training: "训练", profile: "我的" };
@@ -57,6 +56,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
   const [pendingProposal, setPendingProposal] = useState<Proposal | null>(null);
   const [reportTask, setReportTask] = useState<{ id: string; title: string } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [history] = useState<Capture[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(historyStorageKey) || "[]");
@@ -76,16 +76,18 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
   useEffect(() => { void refreshTasks(); }, []);
 
   useEffect(() => {
-    const onHashChange = () => setPage(pageFromHash());
+    const onHashChange = () => { const next = pageFromHash(); setPage(next); if (next !== "today") setVoiceOpen(false); };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
   function navigate(next: Page, day?: string) {
     if (next === "tasks") setFocusDay(day ?? localDate(new Date()));
+    setVoiceOpen(false);
     location.hash = next;
     setPage(next);
     window.scrollTo(0, 0);
   }
+  function openVoice() { navigate("today"); setVoiceOpen(true); }
   function toggle(id: string) {
     const task = serverTasks.find((item) => item.task_id === id);
     if (!task || task.status === "completed") return;
@@ -117,8 +119,8 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
         </header>
         <main id="main" className={`content ${page === "training" ? "training-content" : ""}`}>
           {taskError && <p className="field-error" role="alert">{taskError}</p>}
-          {page === "today" && <TodayPage tasks={visibleTasks} history={history} navigate={navigate} openComposer={(voice, text) => setDraft({ voice, text })} />}
-          {page === "tasks" && <TasksPage key={taskViewKey} serverMode tasks={visibleTasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => setDraft({ voice })} editTask={(task) => setDraft({ edit: task })} openReport={(task) => openReport(task.id)} />}
+          {page === "today" && <TodayPage tasks={visibleTasks} history={history} navigate={navigate} openComposer={(text) => setDraft({ text })} voiceOpen={voiceOpen} openVoice={openVoice} closeVoice={() => setVoiceOpen(false)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} onTaskCompleted={openReport} />}
+          {page === "tasks" && <TasksPage key={taskViewKey} serverMode tasks={visibleTasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => voice ? openVoice() : setDraft({})} editTask={(task) => setDraft({ edit: task })} openReport={(task) => openReport(task.id)} />}
           {page === "training" && <TrainingPage tasks={visibleTasks} navigate={() => navigate("tasks")} />}
           {page === "profile" && <ProfilePage username={username} onLoggedOut={onLoggedOut} />}
         </main>
@@ -128,7 +130,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
           </button>)}
         </nav>
       </div>
-      {draft?.voice ? <VoiceAssistant username={username} onClose={() => setDraft(null)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} onTaskCompleted={openReport} /> : draft && <TaskComposer key={draft.edit?.id || draft.text || "text"} initialText={draft.text} edit={draft.edit} tasks={visibleTasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
+      {draft && <TaskComposer key={draft.edit?.id || draft.text || "text"} initialText={draft.text} edit={draft.edit} tasks={visibleTasks} history={history} onClose={() => setDraft(null)} onSave={save} />}
       {pendingProposal && <TaskProposalDialog proposal={pendingProposal} taskTitle={serverTasks.find((task) => task.task_id === pendingProposal.task_id)?.title} onClose={() => setPendingProposal(null)} onConfirmed={() => void refreshTasks()} onCompleted={(id, title) => setReportTask({ id, title })} />}
       {reportTask && <TaskReportDialog taskId={reportTask.id} title={reportTask.title} onClose={() => setReportTask(null)} />}
     </div>

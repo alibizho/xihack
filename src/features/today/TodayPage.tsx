@@ -3,16 +3,23 @@ import type { Task } from "../tasks/mockTasks";
 import { compareBySchedule, formatDue, parseDue, priorityScore } from "../tasks/mockTasks";
 import type { Capture } from "../../App";
 import { Icon } from "../../shared/Icon";
+import { VoiceAssistant } from "../tasks/VoiceAssistant";
 import "./TodayPage.css";
 
 type Props = {
   tasks: Task[];
   history: Capture[];
   navigate: (page: "tasks" | "training", day?: string) => void;
-  openComposer: (voice?: boolean, text?: string) => void;
+  openComposer: (text: string) => void;
+  voiceOpen: boolean;
+  openVoice: () => void;
+  closeVoice: () => void;
+  onSessionExpired: () => void;
+  onTasksChanged: () => void;
+  onTaskCompleted: (taskId: string) => void;
 };
 
-export function TodayPage({ tasks, history, navigate, openComposer }: Props) {
+export function TodayPage({ tasks, history, navigate, openComposer, voiceOpen, openVoice, closeVoice, onSessionExpired, onTasksChanged, onTaskCompleted }: Props) {
   const [thought, setThought] = useState("");
   const open = tasks.filter((task) => !task.done);
   const next = [...open].sort(compareBySchedule)[0];
@@ -22,14 +29,14 @@ export function TodayPage({ tasks, history, navigate, openComposer }: Props) {
 
   return <div className="today-page">
     <header className="today-intro"><span>{date}</span><h1>{greeting}，<br />今天想先做什么？</h1></header>
-    <section className="assistant-panel" aria-labelledby="capture-title">
+    <section className={`assistant-panel ${voiceOpen ? "voice-active" : ""}`} aria-labelledby="capture-title">
       <span className="demo-pill">本地语音识别 · 账号事务</span>
-      <button className="orb-button" onClick={() => openComposer(true)} aria-label="打开语音助理"><span className="voice-orb"><Icon name="mic" size={31} /></span><strong id="capture-title">点按，问助理一件事</strong></button>
-      <form className="quick-capture" onSubmit={(event) => { event.preventDefault(); if (thought.trim()) openComposer(false, thought); }}>
+      <VoiceAssistant expanded={voiceOpen} onOpen={openVoice} onClose={closeVoice} onSessionExpired={onSessionExpired} onTasksChanged={onTasksChanged} onTaskCompleted={onTaskCompleted} />
+      {!voiceOpen && <form className="quick-capture" onSubmit={(event) => { event.preventDefault(); if (thought.trim()) openComposer(thought); }}>
         <label className="sr-only" htmlFor="quick-thought">文字记录</label>
         <input id="quick-thought" value={thought} onChange={(event) => setThought(event.target.value)} placeholder="或者，直接写下来…" />
         <button type="submit" disabled={!thought.trim()} aria-label="整理文字"><Icon name="arrow" size={19} /></button>
-      </form>
+      </form>}
     </section>
     <div className="home-shortcuts">
       <button className="next-task" onClick={() => navigate("tasks", next ? parseDue(next.due).date : undefined)}><span className="shortcut-label">下一件事</span><strong>{next?.title || "还没有待办"}</strong><span>{next ? `优先分 ${priorityScore(next).toFixed(1)} · ${formatDue(next.due)}` : "添加后会出现在这里"}</span><Icon name="arrow" size={18} /></button>
