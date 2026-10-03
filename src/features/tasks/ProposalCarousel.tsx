@@ -44,7 +44,7 @@ export function ProposalCarousel({ proposals, busy, focusProposalId, onDecide }:
 }) {
   const pending = useMemo(() => proposals.filter((proposal) => proposal.status === "pending" && Date.parse(proposal.expires_at) > Date.now()), [proposals]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const appliedFocusId = useRef<string>();
+  const appliedFocusId = useRef<string | undefined>(undefined);
   const selectedIndex = pending.findIndex((proposal) => proposal.proposal_id === activeId);
   const activeIndex = selectedIndex >= 0 ? selectedIndex : pending.length ? 0 : -1;
   const active = pending[activeIndex];
