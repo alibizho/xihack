@@ -3,7 +3,7 @@ import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
 import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposals, sendMessage, withLocalContext, type Due, type Proposal } from "./agentApi";
 import { startAudioCapture, type AudioCapture, type CapturedAudio } from "./audioCapture";
-import { browserAsrIsReady, prepareBrowserAsr, subscribeBrowserAsr, transcribeBrowser, type BrowserAsrStatus } from "./speech/browserAsr";
+import { browserAsrIsReady, prepareBrowserAsr, transcribeBrowser } from "./speech/browserAsr";
 import "./TaskComposer.css";
 
 type Message = { role: "user" | "assistant"; text: string };
@@ -40,13 +40,9 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [listening, setListening] = useState(false);
-  const [asrStatus, setAsrStatus] = useState<BrowserAsrStatus>({ state: "uninitialized" });
-  const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = subscribeBrowserAsr(setAsrStatus);
     void prepareBrowserAsr().catch(() => undefined);
-    return () => { unsubscribe(); };
   }, []);
 
   useEffect(() => {
@@ -136,7 +132,6 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       }
       let draft;
       if (useServer) {
-        setUsingFallback(true);
         draft = await enhanceTranscription(audio.wav, await csrf());
       } else {
         draft = await calibrate(transcript, await csrf());
@@ -150,7 +145,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       if (!active.current || session !== sessionId.current) return;
       if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
       else setError((reason as Error).message || "转写失败，请重试或使用文字输入");
-    } finally { if (active.current && session === sessionId.current) { setPreparing(false); setUsingFallback(false); } }
+    } finally { if (active.current && session === sessionId.current) setPreparing(false); }
   }
 
   function isUncertainTranscript(text: string, audio: CapturedAudio) {
@@ -164,7 +159,6 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     const session = sessionId.current;
     if (!saved || preparing || busy) return;
     setPreparing(true);
-    setUsingFallback(true);
     setError("");
     try {
       const draft = await enhanceTranscription(saved.wav, await csrf());
@@ -177,7 +171,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       if (!active.current || session !== sessionId.current) return;
       if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
       else setError((reason as Error).message || "增强识别失败，请重试");
-    } finally { if (active.current && session === sessionId.current) { setPreparing(false); setUsingFallback(false); } }
+    } finally { if (active.current && session === sessionId.current) setPreparing(false); }
   }
 
   async function send() {
@@ -254,11 +248,9 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     {expanded && <button className="voice-close" type="button" onClick={close} aria-label="收起语音助理"><Icon name="close" size={18} /></button>}
     <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening ? "结束录音并转写" : "开始录音" : "打开语音助理并开始录音"}>
       <span className={`voice-orb ${expanded ? "voice-orb-active" : ""} ${preparing || listening ? "voice-orb-listening" : ""}`}><Icon name="mic" size={31} /></span>
-      <strong id="capture-title">{expanded ? listening ? "正在录音 · 点按结束" : preparing ? usingFallback ? "正在使用增强识别…" : "正在本地识别…" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
+      <strong id="capture-title">{expanded ? listening ? "正在录音 · 点按结束" : preparing ? "正在识别语音…" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
-    {asrStatus.state === "loading" && !preparing && <p className="voice-chat-note" role="status">{asrStatus.progress ? `正在准备本地语音识别… ${asrStatus.progress}%` : "正在准备本地语音识别…"}</p>}
-    {asrStatus.state === "unsupported" && !preparing && <p className="voice-chat-note" role="status">此浏览器将使用服务器增强识别。</p>}
     {!preparing && lastAudio.current && input && <button className="voice-chat-note voice-enhance" type="button" onClick={() => void retryEnhancedTranscription()}>识别不准确？使用增强识别</button>}
     {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
@@ -281,7 +273,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       <div ref={messageEnd} />
     </div>}
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-    <label className="field-label" htmlFor="voice-input">对话内容（可修改）</label>
+    <label className="field-label" htmlFor="voice-input">对话内容</label>
     <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder="说出或输入你想问的事" />
     {clarification && <p className="voice-chat-note" role="status">{clarification}</p>}
     {error && <p className="field-error" role="alert">{error}</p>}
