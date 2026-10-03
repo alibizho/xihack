@@ -25,6 +25,8 @@ const zh = {
   assistantPill: "语音助理 · 账号事务", quickPlaceholder: "或者，直接告诉助理…", sendAria: "发送给助理",
   nextTaskLabel: "下一件事", noTasksYet: "还没有待办", addFirstHint: "添加后会出现在这里", priorityLabel: "优先分",
   trainingShortcut: "专注训练", countTo25: "从 1 数到 25", localHistory: "本机旧记录", noneYet: "暂无",
+  meditationTitle: "片刻静心", meditationIntro: "留一点时间，慢慢呼吸。", meditationDuration: "静心时长", meditationMinuteShort: "分钟",
+  meditationTimeRemaining: "剩余时间", meditationStart: "开始", meditationPause: "暂停", meditationReset: "重置", meditationComplete: "本次静心已结束。",
   recordsCount: "{n} 条", editedLabel: "已修改", noLocalRecords: "这里没有旧版浏览器记录。",
   // voice assistant
   collapseAria: "收起语音助理", micOpening: "正在开启麦克风…", micListening: "正在聆听 · 点按结束",
@@ -117,6 +119,8 @@ const en: Record<Key, string> = {
   assistantPill: "Voice assistant", quickPlaceholder: "Or just tell the assistant…", sendAria: "Send to assistant",
   nextTaskLabel: "Next task", noTasksYet: "No tasks yet", addFirstHint: "Add one and it shows up here", priorityLabel: "Priority",
   trainingShortcut: "Focus training", countTo25: "Count 1 to 25", localHistory: "Old local records", noneYet: "None",
+  meditationTitle: "A moment to pause", meditationIntro: "Take a little time to breathe.", meditationDuration: "Meditation duration", meditationMinuteShort: "min",
+  meditationTimeRemaining: "Time remaining", meditationStart: "Start", meditationPause: "Pause", meditationReset: "Reset", meditationComplete: "Your meditation is complete.",
   recordsCount: "{n} items", editedLabel: "edited", noLocalRecords: "No old browser records here.",
   // voice assistant
   collapseAria: "Collapse voice assistant", micOpening: "Opening microphone…", micListening: "Listening · tap to end",

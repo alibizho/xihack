@@ -42,6 +42,21 @@
 .home-shortcuts span:not(.shortcut-label) { color: var(--muted); font-size: 12px; }
 .shortcut-label { color: #758792; font-size: 11px; letter-spacing: .08em; }
 .training-shortcut > svg:first-child { color: var(--blue); margin-bottom: 3px; }
+.meditation-panel { display: grid; grid-template-columns: 1fr auto; gap: 20px; width: 100%; margin-top: 16px; padding: 22px; border: 1px solid #e9ece7; border-radius: 12px; background: linear-gradient(120deg, #fbfaf3, #eef5f2); box-shadow: 0 8px 25px #28495a20; }
+.meditation-heading { display: flex; align-items: flex-start; gap: 14px; }
+.meditation-mark { flex: none; width: 42px; height: 42px; border: 1px solid #b8d6d5; border-radius: 50%; background: radial-gradient(circle, #8ebcbd 0 21%, transparent 24%), radial-gradient(circle, #e7f3ed 0 56%, #d4e9e6 57%); }
+.meditation-heading h2 { margin: 1px 0 5px; color: var(--blue-dark); font-size: 20px; }
+.meditation-heading p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.meditation-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.meditation-durations { display: flex; gap: 4px; padding: 3px; border: 1px solid #dce6e5; border-radius: 9px; background: #fffdf8; }
+.meditation-durations button { min-width: 65px; min-height: 44px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 13px; }
+.meditation-durations button[aria-pressed="true"] { background: #dcebf0; color: var(--blue-dark); font-weight: 700; }
+.meditation-durations button:disabled { cursor: default; }
+.meditation-timer { display: flex; align-items: center; gap: 16px; }
+.meditation-timer > span { min-width: 105px; color: var(--blue-dark); font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+.meditation-actions { display: flex; gap: 8px; }
+.meditation-actions .button { min-height: 44px; padding: 0 15px; border-radius: 8px; }
+.meditation-complete { margin: 0; color: var(--blue-dark); font-size: 12px; }
 .history-panel { margin-top: 16px; border: 1px solid #e9ece7; border-radius: 12px; background: var(--paper); padding: 0 20px; }
 .history-panel summary { min-height: 54px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 13px; font-weight: 600; }
 .history-panel summary span { color: #778a95; font-size: 11px; font-weight: 400; }
@@ -58,6 +73,10 @@
   .home-shortcuts { gap: 9px; }
   .home-shortcuts button { min-height: 115px; border-radius: 10px; padding: 13px; }
   .home-shortcuts strong { font-size: 14px; }
+  .meditation-panel { grid-template-columns: 1fr; gap: 18px; padding: 18px; }
+  .meditation-controls { align-items: stretch; }
+  .meditation-durations button { flex: 1; }
+  .meditation-timer { justify-content: space-between; flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   .voice-orb, .voice-orb-listening::before { animation: none; transition: none; }
