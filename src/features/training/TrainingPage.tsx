@@ -84,7 +84,8 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
 
   return <div className="training-page">
     <header className="training-intro"><span className="section-kicker">{t("trainingKicker")}</span><h1>{t("countFrom1to25")}</h1><p>{t("pickDifficulty")}</p></header>
-    <div className="difficulty-picker" role="group" aria-label={t("difficultyAria")}>{modes.map((mode) => <button key={mode.id} className={difficulty === mode.id ? "selected" : ""} aria-pressed={difficulty === mode.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setDifficulty(mode.id)}><strong>{mode.name()}</strong><span>{mode.detail()}</span></button>)}</div>
+    <div className="difficulty-picker" role="group" aria-label={t("difficultyAria")}>{modes.map((mode) => <button key={mode.id} className={difficulty === mode.id ? "selected" : ""} aria-pressed={difficulty === mode.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setDifficulty(mode.id)}>{mode.name()}</button>)}</div>
+    <p className="difficulty-detail" aria-live="polite">{modes.find((mode) => mode.id === difficulty)?.detail()}</p>
     <section className="training-surface" aria-label={t("boardAria")}>
       <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? fill("nextNumber", { n: target }) : phase === "playing" ? fill("doneCount", { n: target - 1 }) : modes.find((mode) => mode.id === difficulty)?.name()}</span><strong>{formatTime(elapsed)}</strong></div>
       {phase !== "idle" && <div className="board-wrap" ref={boardWrap}>
