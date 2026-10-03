@@ -1,10 +1,10 @@
 .today-page { max-width: 820px; margin: auto; }
-.today-page:has(.assistant-panel.voice-active) { max-width: 1040px; }
+.today-page:has(.assistant-panel.voice-active) { max-width: 960px; }
 .today-intro { padding: 5px 4px 13px; }
 .today-intro > span { color: #fffdf5; font-size: 12px; letter-spacing: .12em; }
 .today-intro h1 { margin: 8px 0 0; font-size: clamp(29px, 4vw, 39px); line-height: 1.16; letter-spacing: -.04em; font-weight: 600; color: #fffdf5; }
 .assistant-panel { position: relative; min-height: 305px; display: flex; align-items: center; flex-direction: column; justify-content: center; gap: 11px; border: 1px solid #e9ece7; border-radius: 16px; background: var(--paper); box-shadow: 0 16px 40px #28495a2b; padding: 22px; }
-.assistant-panel.voice-active { padding-top: 34px; padding-bottom: 28px; }
+.assistant-panel.voice-active { gap: 16px; padding: 30px 36px 28px; }
 .assistant-panel.voice-active .demo-pill { display: none; }
 .voice-capture { width: 100%; display: flex; align-items: center; flex-direction: column; }
 .voice-close { position: absolute; top: 14px; right: 14px; z-index: 1; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #eaf0ef; color: var(--blue-dark); }
@@ -19,7 +19,7 @@
 @keyframes voice-pulse { from { transform: scale(.94); opacity: .8; } to { transform: scale(1.27); opacity: 0; } }
 @keyframes orb-breathe { 50% { box-shadow: inset -13px -15px 22px #8caec229, inset 9px 8px 18px #fff, 0 18px 39px #819bb562; } }
 .voice-orb svg { background: #ffffffb8; border-radius: 50%; padding: 10px; width: 50px; height: 50px; }
-.voice-capture-expanded { display: grid; grid-template-rows: 0fr; align-self: stretch; min-width: 0; opacity: 0; width: min(100%, 840px); transition: grid-template-rows .34s ease, opacity .24s ease; }
+.voice-capture-expanded { display: grid; grid-template-rows: 0fr; align-self: stretch; min-width: 0; opacity: 0; width: min(100%, 760px); transition: grid-template-rows .34s ease, opacity .24s ease; }
 .voice-capture-expanded-inner { width: 100%; min-width: 0; min-height: 0; overflow: hidden; }
 .voice-capture.is-open .voice-capture-expanded { grid-template-rows: 1fr; opacity: 1; }
 .voice-capture .voice-chat-messages { width: 100%; max-height: 210px; min-height: 60px; margin-top: 15px; }
