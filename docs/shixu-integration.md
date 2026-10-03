@@ -12,7 +12,7 @@
 
 后端 `contracts/openapi.json` 当前包含 `/api/auth/*`、`/api/tasks`、`/api/proposals/*`、`/api/conversations/*`、`/api/runs/*` 和 `/healthz`。账号模式的任务按“重要 / 紧急”二选一显示，浏览器演示模式继续使用 0–10 分；后端任务创建、更新、完成均经过提案与再次确认。已完成账号任务目前不能恢复待办，因为后端尚无对应接口。
 
-前端语音输入使用浏览器语音识别；账号模式下，识别或输入的文字会调用后端 `/api/transcriptions` 校准文字和时间，但重要/紧急的初步判断仍由浏览器演示规则给出，用户必须自行核对二选一字段。后端可用 Agent Tool 创建待确认事务提案；对话页面调用 `/api/conversations/{conversation_id}/proposal-ids` 获取待确认编号，再读取提案交由用户确认。MiMo 工具调用修复已在隔离环境通过真实模型和 PostgreSQL 测试；正式站点部署及账号联调待完成，见 [Agent 交接记录](backend-agent-handoff.md)。服务端音频回退需要额外本地 Whisper 模型，本部署没有启用；浏览器不上传音频。训练复盘由现有 Node 服务提供。账号数据与浏览器的演示任务不自动合并。
+前端语音输入使用浏览器语音识别；账号模式下，识别或输入的文字会调用后端 `/api/transcriptions` 校准文字和时间，但重要/紧急的初步判断仍由浏览器演示规则给出，用户必须自行核对二选一字段。后端可用 Agent Tool 创建待确认事务提案；对话页面调用 `/api/conversations/{conversation_id}/proposal-ids` 获取待确认编号，再读取提案交由用户确认。MiMo 工具调用修复已在正式站点通过账号查询、提案、确认全链路验收，见 [Agent 交接记录](backend-agent-handoff.md)。服务端音频回退需要额外本地 Whisper 模型，本部署没有启用；浏览器不上传音频。训练复盘由现有 Node 服务提供。账号数据与浏览器的演示任务不自动合并。
 
 ## 部署方式
 

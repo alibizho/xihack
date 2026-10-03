@@ -29,7 +29,7 @@ npm test
 - **Today and tasks:** browser demo data remains local; signed-in users can fetch account tasks and confirm backend task proposals. Importance and urgency use yes/no in account mode.
 - **Voice:** browser speech recognition produces text; signed-in users can send that text for backend intent and time calibration. Raw audio is not uploaded by this flow.
 - **Training:** a three-level 5×5 Schulte game with local records and saved per-round MiMo feedback. Reviews can be reopened from training history.
-- **Account and assistant:** registration, sign-in, conversations, and Agent runs are connected to the backend. The MiMo tool-call fix has passed isolated model and database checks; production deployment and account verification remain, see [the handoff note](docs/backend-agent-handoff.md).
+- **Account and assistant:** registration, sign-in, conversations, and Agent runs are connected to the backend. MiMo task query, pending proposal, and confirmation passed live account verification, see [the handoff note](docs/backend-agent-handoff.md).
 
 The target behavior is described in [PRD v1.0](docs/PRD_v1.0.pdf), with the narrower hackathon scope in [frontend plan](docs/frontend-plan.md). Integration and deployment details are in [the integration guide](docs/shixu-integration.md).
 
