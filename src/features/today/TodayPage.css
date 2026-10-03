@@ -22,6 +22,7 @@
 .voice-capture-expanded { display: grid; grid-template-rows: 0fr; align-self: stretch; min-width: 0; opacity: 0; width: min(100%, 760px); transition: grid-template-rows .34s ease, opacity .24s ease; }
 .voice-capture-expanded-inner { width: 100%; min-width: 0; min-height: 0; overflow: hidden; }
 .voice-capture.is-open .voice-capture-expanded { grid-template-rows: 1fr; opacity: 1; }
+.voice-capture-expanded .assistant-quick-replies { width: 100%; }
 .voice-capture .voice-chat-messages { width: 100%; max-height: 210px; min-height: 60px; margin-top: 15px; }
 .voice-capture-form { width: 100%; }
 .voice-capture-form .field-label { margin: 14px 0 7px; }
