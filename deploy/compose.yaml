@@ -50,8 +50,8 @@ services:
 
   frontend:
     build:
-      context: ..
-      dockerfile: deploy/frontend.Dockerfile
+      context: ../frontend
+      dockerfile: ../deploy/frontend.Dockerfile
     restart: unless-stopped
     environment:
       PORT: "3000"
