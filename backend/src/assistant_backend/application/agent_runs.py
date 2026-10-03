@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from assistant_backend.application.agent_dto import RunAccepted, RunEventView, RunStatus
 from assistant_backend.config import Settings
+from assistant_backend.domain.conversations import title_from_first_message
 from assistant_backend.infrastructure.models import (
     AgentRun,
     AuthRateLimit,
@@ -101,6 +102,12 @@ class AgentRunService:
                     raise RunFailure("RUN_LIMIT_REACHED", 429, "Too many active runs")
 
                 self._consume_rate_limits(session, user_id, ip_address, now)
+                if conversation.title == "新对话" and session.scalar(
+                    select(Message.message_id)
+                    .where(Message.conversation_id == conversation_id)
+                    .limit(1)
+                ) is None:
+                    conversation.title = title_from_first_message(content)
                 message = Message(
                     message_id=str(uuid4()),
                     conversation_id=conversation_id,

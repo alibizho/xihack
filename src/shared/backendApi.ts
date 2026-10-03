@@ -94,6 +94,7 @@ export type SpeechDraft = { draft_text: string; intent: "create" | "update" | "c
 export const calibrateSpeechDraft = (text: string) => request<SpeechDraft>("/api/transcriptions", { method: "POST", body: JSON.stringify({ text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) }, true);
 export const listConversations = async () => (await request<{ items: Conversation[] }>("/api/conversations?limit=100")).items;
 export const createConversation = (title = "新对话") => request<Conversation>("/api/conversations", { method: "POST", body: JSON.stringify({ client_request_id: crypto.randomUUID(), title }) }, true);
+export const renameConversation = (id: string, title: string) => request<Conversation>(`/api/conversations/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ title }) }, true);
 export const getConversation = (id: string) => request<ConversationDetail>(`/api/conversations/${encodeURIComponent(id)}?limit=100`);
 export const listConversationProposalIds = async (id: string) => (await request<{ proposal_ids: string[] }>(`/api/conversations/${encodeURIComponent(id)}/proposal-ids`)).proposal_ids;
 export const submitAgentMessage = (id: string, content: string) => request<{ run_id: string }>(`/api/conversations/${encodeURIComponent(id)}/messages`, { method: "POST", body: JSON.stringify({ client_message_id: crypto.randomUUID(), content }) }, true);
