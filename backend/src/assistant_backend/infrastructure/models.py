@@ -115,6 +115,7 @@ class Proposal(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "client_request_id", name="uq_proposals_user_request"),
         Index("ix_proposals_user_task_status", "user_id", "task_id", "status"),
+        Index("ix_proposals_batch_created", "batch_id", "created_at"),
         CheckConstraint(
             "operation IN ('create', 'update', 'complete', 'delete')",
             name="ck_proposals_operation",
@@ -126,6 +127,9 @@ class Proposal(Base):
     )
 
     proposal_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    batch_id: Mapped[str | None] = mapped_column(
+        ForeignKey("proposal_batches.batch_id", ondelete="CASCADE")
+    )
     user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"))
     client_request_id: Mapped[str] = mapped_column(String(128), nullable=False)
     request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -134,6 +138,31 @@ class Proposal(Base):
     task_id: Mapped[str | None] = mapped_column(String(36))
     expected_version: Mapped[int | None] = mapped_column(Integer)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    confirm_key_hash: Mapped[str | None] = mapped_column(String(64))
+    receipt: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ProposalBatch(Base):
+    __tablename__ = "proposal_batches"
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_request_id", name="uq_proposal_batches_request"),
+        CheckConstraint(
+            "status IN ('pending', 'confirmed', 'cancelled')",
+            name="ck_proposal_batches_status",
+        ),
+        Index("ix_proposal_batches_user_created", "user_id", "created_at"),
+        Index("ix_proposal_batches_run", "run_id"),
+    )
+
+    batch_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"))
+    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.run_id", ondelete="CASCADE"))
+    client_request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     confirm_key_hash: Mapped[str | None] = mapped_column(String(64))

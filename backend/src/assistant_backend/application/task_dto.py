@@ -191,3 +191,19 @@ class ConfirmationReceipt(BaseModel):
     task_id: str
     task: TaskResponse | None = None
     status: Literal["confirmed"] = "confirmed"
+
+
+class ProposalBatchResponse(BaseModel):
+    batch_id: str
+    run_id: str
+    status: Literal["pending", "confirmed", "cancelled", "expired"]
+    proposals: list[ProposalResponse]
+    expires_at: datetime
+    created_at: datetime
+
+
+class ProposalBatchConfirmationReceipt(BaseModel):
+    batch_id: str
+    status: Literal["confirmed"] = "confirmed"
+    confirmed_count: int
+    tasks: list[TaskResponse]

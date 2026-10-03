@@ -367,6 +367,27 @@ def current_user_id(client: TestClient) -> str:
     return identity.user_id
 
 
+def create_agent_batch(client: TestClient, batch_key: str, tasks: list[dict]) -> dict:
+    conversation = create_conversation(client, f"batch-{batch_key}")
+    accepted = submit_message(
+        client,
+        conversation["conversation_id"],
+        f"batch-message-{batch_key}",
+        "Create these task drafts",
+    )
+    result = json.loads(
+        ProposalTaskTools(
+            client.app.state.task_service, current_user_id(client), accepted["run_id"]
+        ).invoke(
+            "propose_create_tasks",
+            json.dumps({"tasks": tasks}, ensure_ascii=False),
+            f"batch-call-{batch_key}",
+        )
+    )
+    assert result["status"] == "pending", result
+    return client.get(f"/api/proposal-batches/{result['batch_id']}").json()
+
+
 def test_agent_message_submit_is_atomic_idempotent_and_account_scoped(
     client: TestClient,
 ) -> None:
@@ -543,6 +564,54 @@ def test_agent_worker_runs_read_only_tool_and_sse_replays_persisted_events(
     assert foreign_tool_result == '{"error": "not_found"}'
 
 
+def test_agent_runtime_deduplicates_exact_same_round_tool_calls_with_safe_event(
+    client: TestClient,
+) -> None:
+    register(client, "duplicate_calls")
+    conversation = create_conversation(client, "duplicate-calls")
+    accepted = submit_message(
+        client, conversation["conversation_id"], "duplicate-message", "Show my tasks"
+    )
+    runs = client.app.state.agent_run_service
+    worker_id = "worker-duplicates"
+    assert runs.claim_next(worker_id) == accepted["run_id"]
+
+    class DuplicateProvider:
+        calls = 0
+
+        def stream_chat(self, messages, tools, max_output_tokens):
+            del tools, max_output_tokens
+            self.calls += 1
+            if self.calls == 1:
+                yield ChatDelta(
+                    tool_calls=[
+                        ToolCallDelta(0, "search-1", "search_tasks", '{"limit":5}'),
+                        ToolCallDelta(1, "search-2", "search_tasks", '{ "limit" : 5 }'),
+                    ]
+                )
+                return
+            results = [message for message in messages if message["role"] == "tool"]
+            assert [message["tool_call_id"] for message in results] == ["search-1", "search-2"]
+            assert results[0]["content"] == results[1]["content"]
+            yield ChatDelta(content="目前没有待办。", reasoning_content="private reasoning")
+
+    provider = DuplicateProvider()
+    AgentRuntime(runs, client.app.state.task_service, provider, client.app.state.settings).execute(
+        accepted["run_id"], worker_id
+    )
+    assert provider.calls == 2
+    events = runs.events_after(current_user_id(client), accepted["run_id"], 0)
+    duplicates = [event for event in events if event.event_type == "run.tool_duplicate"]
+    assert len(duplicates) == 1
+    assert duplicates[0].payload == {"run_id": accepted["run_id"], "count": 1}
+    assert all("arguments" not in str(event.payload) for event in events)
+    progress = [event.payload for event in events if event.event_type == "run.progress"]
+    assert any(event.get("phase") == "checking_tasks" for event in progress)
+    stream = client.get(f"/api/runs/{accepted['run_id']}/events", headers={"Last-Event-ID": "0"})
+    assert "private reasoning" not in stream.text
+    assert "search_tasks" not in stream.text
+
+
 def test_agent_proposal_tool_requires_confirmation_before_task_write(client: TestClient) -> None:
     register(client, "first_user")
     conversation = create_conversation(client, "proposal-conversation")
@@ -566,51 +635,47 @@ def test_agent_proposal_tool_requires_confirmation_before_task_write(client: Tes
             del max_output_tokens
             self.calls += 1
             if self.calls == 1:
-                assert any(tool["function"]["name"] == "propose_create_task" for tool in tools)
+                assert any(tool["function"]["name"] == "propose_create_tasks" for tool in tools)
+                assert not any(tool["function"]["name"] == "propose_create_task" for tool in tools)
                 yield ChatDelta(
                     tool_calls=[
                         ToolCallDelta(
                             index=0,
                             call_id="proposal-call-1",
-                            name="propose_create_task",
+                            name="propose_create_tasks",
                             arguments=json.dumps(
                                 {
-                                    "task": {
-                                        "title": "交数学作业",
-                                        "description": "检查数学题约半小时",
-                                        "category": "学习",
-                                        "due": {
-                                            "precision": "date",
-                                            "date": "2026-10-04",
-                                            "timezone": "Asia/Shanghai",
+                                    "tasks": [
+                                        {
+                                            "title": "交数学作业",
+                                            "description": "检查数学题约半小时",
+                                            "category": "学习",
+                                            "due": {
+                                                "precision": "date",
+                                                "date": "2026-10-04",
+                                                "timezone": "Asia/Shanghai",
+                                            },
+                                            "importance": 8.5,
+                                            "urgency": 9.0,
                                         },
-                                        "importance": 8.5,
-                                        "urgency": 9.0,
-                                    }
-                                }
-                            ),
-                        ),
-                        ToolCallDelta(
-                            index=1,
-                            call_id="proposal-call-2",
-                            name="propose_create_task",
-                            arguments=json.dumps(
-                                {
-                                    "task": {
-                                        "title": "给妈妈打电话",
-                                        "category": "家庭",
-                                        "due": None,
-                                        "importance": 7.0,
-                                        "urgency": 3.0,
-                                    }
+                                        {
+                                            "title": "给妈妈打电话",
+                                            "category": "家庭",
+                                            "due": None,
+                                            "importance": 7.0,
+                                            "urgency": 3.0,
+                                        },
+                                    ]
                                 }
                             ),
                         ),
                     ]
                 )
                 return
-            assert any(message["role"] == "tool" for message in messages)
-            yield ChatDelta(content="已整理两项待确认提案，请逐项确认。")
+            tool_results = [message for message in messages if message["role"] == "tool"]
+            assert [message["tool_call_id"] for message in tool_results] == ["proposal-call-1"]
+            assert json.loads(tool_results[0]["content"])["pending_count"] == 2
+            yield ChatDelta(content="两项草稿已准备好，请审核。")
 
     AgentRuntime(
         runs,
@@ -633,6 +698,12 @@ def test_agent_proposal_tool_requires_confirmation_before_task_write(client: Tes
         "urgency": 9.0,
     }
     assert by_title["给妈妈打电话"]["task"]["due"] is None
+    batches = client.get(f"/api/runs/{accepted['run_id']}/proposal-batches")
+    assert batches.status_code == 200
+    assert len(batches.json()) == 1
+    batch = batches.json()[0]
+    assert batch["status"] == "pending"
+    assert len(batch["proposals"]) == 2
     with client.app.state.agent_run_service.factory() as session:
         proposals = list(
             session.scalars(select(Proposal).where(Proposal.client_request_id.like("agent:%")))
@@ -641,19 +712,219 @@ def test_agent_proposal_tool_requires_confirmation_before_task_write(client: Tes
         assert all(item.source == "agent" and item.status == "pending" for item in proposals)
     proposal_id = by_title["交数学作业"]["proposal_id"]
 
-    confirmed = client.post(
+    single_confirm = client.post(
         f"/api/proposals/{proposal_id}/confirm",
         json={"idempotency_key": "agent-confirm"},
         headers=write_headers(client),
     )
-    assert confirmed.status_code == 200
-    assert client.get("/api/tasks").json()["items"][0]["title"] == "交数学作业"
-    assert (
-        client.get(f"/api/proposals/{by_title['给妈妈打电话']['proposal_id']}").json()["status"]
-        == "pending"
+    assert single_confirm.status_code == 409
+    assert single_confirm.json()["code"] == "PROPOSAL_BATCH_CONFIRM_REQUIRED"
+    batch_path = f"/api/proposal-batches/{batch['batch_id']}/confirm"
+    confirmed = client.post(
+        batch_path,
+        json={"idempotency_key": "agent-confirm"},
+        headers=write_headers(client),
     )
-    register(client, "second_user")
-    assert client.get(f"/api/runs/{accepted['run_id']}/proposals").status_code == 404
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["confirmed_count"] == 2
+    assert [task["title"] for task in confirmed.json()["tasks"]] == ["交数学作业", "给妈妈打电话"]
+    replay = client.post(
+        batch_path, json={"idempotency_key": "agent-confirm"}, headers=write_headers(client)
+    )
+    assert replay.json() == confirmed.json()
+    assert len(client.get("/api/tasks").json()["items"]) == 2
+    with TestClient(client.app, base_url=ORIGIN) as other:
+        register(other, "second_user")
+        assert other.get(f"/api/runs/{accepted['run_id']}/proposals").status_code == 404
+        assert other.get(f"/api/proposal-batches/{batch['batch_id']}").status_code == 404
+        denied = other.post(
+            batch_path,
+            json={"idempotency_key": "foreign-key"},
+            headers=write_headers(other),
+        )
+        assert denied.status_code == 404
+
+
+def test_agent_batch_edits_and_cancels_pending_items_then_confirms_remaining(
+    client: TestClient,
+) -> None:
+    register(client, "batch_owner")
+    batch = create_agent_batch(
+        client,
+        "edit-cancel",
+        [
+            {"title": "First draft", "category": "工作", "importance": 6.0, "urgency": 4.0},
+            {"title": "Remove this", "category": "生活", "importance": 5.0, "urgency": 3.0},
+            {"title": "Keep this", "category": "学习", "importance": 8.0, "urgency": 7.0},
+        ],
+    )
+    first, removed, _ = batch["proposals"]
+    corrected = client.patch(
+        f"/api/proposal-batches/{batch['batch_id']}/items/{first['proposal_id']}",
+        json={
+            "title": "Corrected title",
+            "description": "Edited before confirmation",
+            "category": "工作",
+            "due": {"precision": "date", "date": "2026-10-08", "timezone": "Asia/Shanghai"},
+            "importance": 7.2,
+            "urgency": 4.5,
+        },
+        headers=write_headers(client),
+    )
+    assert corrected.status_code == 200, corrected.text
+    assert corrected.json()["proposals"][0]["task"]["title"] == "Corrected title"
+    canceled = client.post(
+        f"/api/proposal-batches/{batch['batch_id']}/items/{removed['proposal_id']}/cancel",
+        json={},
+        headers=write_headers(client),
+    )
+    assert canceled.status_code == 200
+    assert canceled.json()["proposals"][1]["status"] == "cancelled"
+    assert len(client.get("/api/tasks").json()["items"]) == 0
+    receipt = client.post(
+        f"/api/proposal-batches/{batch['batch_id']}/confirm",
+        json={"idempotency_key": "remaining-only"},
+        headers=write_headers(client),
+    )
+    assert receipt.status_code == 200, receipt.text
+    assert receipt.json()["confirmed_count"] == 2
+    assert {task["title"] for task in receipt.json()["tasks"]} == {
+        "Corrected title",
+        "Keep this",
+    }
+
+
+def test_agent_batch_idempotency_and_invalid_item_validation_are_atomic(
+    client: TestClient,
+) -> None:
+    register(client, "batch_idempotency")
+    conversation = create_conversation(client, "batch-idempotency")
+    accepted = submit_message(
+        client, conversation["conversation_id"], "batch-idempotency-message", "Create two tasks"
+    )
+    tools = ProposalTaskTools(
+        client.app.state.task_service, current_user_id(client), accepted["run_id"]
+    )
+    valid = {
+        "tasks": [{"title": "Valid task", "category": "工作", "importance": 5.0, "urgency": 3.0}]
+    }
+    first = json.loads(tools.invoke("propose_create_tasks", json.dumps(valid), "same-call"))
+    replay = json.loads(tools.invoke("propose_create_tasks", json.dumps(valid), "same-call"))
+    assert replay["batch_id"] == first["batch_id"]
+    conflict = json.loads(
+        tools.invoke(
+            "propose_create_tasks",
+            json.dumps({"tasks": [{**valid["tasks"][0], "title": "Changed"}]}),
+            "same-call",
+        )
+    )
+    assert conflict["error"] == "idempotency_conflict"
+    invalid = json.loads(
+        tools.invoke(
+            "propose_create_tasks",
+            json.dumps(
+                {
+                    "tasks": [
+                        valid["tasks"][0],
+                        {
+                            "title": "Bad task",
+                            "category": "工作",
+                            "importance": 10.5,
+                            "urgency": 2.0,
+                        },
+                    ]
+                }
+            ),
+            "invalid-call",
+        )
+    )
+    assert invalid["error"] == "invalid_arguments"
+    assert len(client.get(f"/api/runs/{accepted['run_id']}/proposal-batches").json()) == 1
+    assert len(client.get(f"/api/runs/{accepted['run_id']}/proposals").json()) == 1
+
+
+def test_empty_expired_and_failed_batch_confirmation_never_partially_writes(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    register(client, "batch_failures")
+    empty = create_agent_batch(
+        client,
+        "empty",
+        [{"title": "Only item", "category": "工作", "importance": 5.0, "urgency": 3.0}],
+    )
+    item_id = empty["proposals"][0]["proposal_id"]
+    assert (
+        client.post(
+            f"/api/proposal-batches/{empty['batch_id']}/items/{item_id}/cancel",
+            json={},
+            headers=write_headers(client),
+        ).status_code
+        == 200
+    )
+    empty_confirm = client.post(
+        f"/api/proposal-batches/{empty['batch_id']}/confirm",
+        json={"idempotency_key": "empty-key"},
+        headers=write_headers(client),
+    )
+    assert empty_confirm.status_code == 409
+    assert empty_confirm.json()["code"] == "PROPOSAL_BATCH_EMPTY"
+
+    expired = create_agent_batch(
+        client,
+        "expired",
+        [{"title": "Expired item", "category": "工作", "importance": 5.0, "urgency": 3.0}],
+    )
+    with client.app.state.task_service.factory.begin() as session:
+        from assistant_backend.infrastructure.models import ProposalBatch
+
+        batch_row = session.get(ProposalBatch, expired["batch_id"])
+        batch_row.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        proposal_row = session.get(Proposal, expired["proposals"][0]["proposal_id"])
+        proposal_row.expires_at = batch_row.expires_at
+    expired_confirm = client.post(
+        f"/api/proposal-batches/{expired['batch_id']}/confirm",
+        json={"idempotency_key": "expired-key"},
+        headers=write_headers(client),
+    )
+    assert expired_confirm.status_code == 409
+    assert expired_confirm.json()["code"] == "PROPOSAL_EXPIRED"
+    assert client.get("/api/tasks").json()["items"] == []
+
+    rollback = create_agent_batch(
+        client,
+        "rollback",
+        [
+            {"title": "Will roll back one", "category": "工作", "importance": 5.0, "urgency": 3.0},
+            {
+                "title": "Will trigger failure",
+                "category": "工作",
+                "importance": 5.0,
+                "urgency": 3.0,
+            },
+        ],
+    )
+    original_set_due = __import__(
+        "assistant_backend.application.tasks", fromlist=["_set_due"]
+    )._set_due
+    calls = 0
+
+    def fail_on_second(task, due):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("simulated second row failure")
+        original_set_due(task, due)
+
+    monkeypatch.setattr("assistant_backend.application.tasks._set_due", fail_on_second)
+    with pytest.raises(RuntimeError, match="simulated second row failure"):
+        client.app.state.task_service.confirm_proposal_batch(
+            current_user_id(client), rollback["batch_id"], "rollback-key"
+        )
+    assert client.get("/api/tasks").json()["items"] == []
+    assert all(
+        item["status"] == "pending"
+        for item in client.get(f"/api/proposal-batches/{rollback['batch_id']}").json()["proposals"]
+    )
 
 
 def test_completed_task_report_is_analyzed_and_account_scoped(client: TestClient) -> None:

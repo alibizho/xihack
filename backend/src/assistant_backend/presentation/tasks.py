@@ -12,8 +12,11 @@ from assistant_backend.presentation.errors import ErrorResponse
 from assistant_backend.presentation.schemas import (
     ConfirmationReceipt,
     ProposalConfirmationRequest,
+    ProposalBatchConfirmationReceipt,
+    ProposalBatchResponse,
     ProposalCreateRequest,
     ProposalResponse,
+    TaskCreate,
     TaskListResponse,
     TaskResponse,
 )
@@ -182,3 +185,55 @@ def cancel_proposal(
     service: Annotated[TaskService, Depends(get_service)],
 ) -> None:
     service.cancel(identity.user_id, proposal_id)
+
+
+@router.get("/proposal-batches/{batch_id}", response_model=ProposalBatchResponse)
+def get_proposal_batch(
+    batch_id: str,
+    identity: Annotated[SessionIdentity, Depends(get_identity)],
+    service: Annotated[TaskService, Depends(get_service)],
+) -> ProposalBatchResponse:
+    return service.get_proposal_batch(identity.user_id, batch_id)
+
+
+@router.patch(
+    "/proposal-batches/{batch_id}/items/{proposal_id}",
+    response_model=ProposalBatchResponse,
+    dependencies=[Depends(require_origin), Depends(require_csrf)],
+)
+def update_proposal_batch_item(
+    batch_id: str,
+    proposal_id: str,
+    task: TaskCreate,
+    identity: Annotated[SessionIdentity, Depends(get_identity)],
+    service: Annotated[TaskService, Depends(get_service)],
+) -> ProposalBatchResponse:
+    return service.update_proposal_batch_item(identity.user_id, batch_id, proposal_id, task)
+
+
+@router.post(
+    "/proposal-batches/{batch_id}/items/{proposal_id}/cancel",
+    response_model=ProposalBatchResponse,
+    dependencies=[Depends(require_origin), Depends(require_csrf)],
+)
+def cancel_proposal_batch_item(
+    batch_id: str,
+    proposal_id: str,
+    identity: Annotated[SessionIdentity, Depends(get_identity)],
+    service: Annotated[TaskService, Depends(get_service)],
+) -> ProposalBatchResponse:
+    return service.cancel_proposal_batch_item(identity.user_id, batch_id, proposal_id)
+
+
+@router.post(
+    "/proposal-batches/{batch_id}/confirm",
+    response_model=ProposalBatchConfirmationReceipt,
+    dependencies=[Depends(require_origin), Depends(require_csrf)],
+)
+def confirm_proposal_batch(
+    batch_id: str,
+    body: Annotated[ProposalConfirmationRequest, Body()],
+    identity: Annotated[SessionIdentity, Depends(get_identity)],
+    service: Annotated[TaskService, Depends(get_service)],
+) -> ProposalBatchConfirmationReceipt:
+    return service.confirm_proposal_batch(identity.user_id, batch_id, body.idempotency_key)

@@ -158,6 +158,24 @@ def _proposal_tool(name: str, description: str, properties: dict[str, Any]) -> d
 
 PROPOSAL_TOOLS = [
     _proposal_tool(
+        "propose_create_tasks",
+        "Save one batch of 1 to 10 interpreted task proposals. Use exactly one call for a multi-task request. Every item must include a concise title, category, importance, and urgency; include due only when supported by the user's words. Do not guess missing key actions or objects. The batch remains pending until the user reviews and confirms it.",
+        {
+            "tasks": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 10,
+                "items": {
+                    "type": "object",
+                    "properties": _task_properties()
+                    | {"category": {"type": "string", "minLength": 1, "maxLength": 64}},
+                    "required": ["title", "category", "importance", "urgency"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+    ),
+    _proposal_tool(
         "propose_create_task",
         "Save an interpreted task proposal, with a short action title, inferred category and scores, and a due date/time or null. Never copy the whole utterance into the title. The user must confirm it.",
         {
@@ -265,6 +283,36 @@ class ProposalTaskTools:
                     client_request_id=self._request_id(call_id),
                     operation=ProposalOperation.CREATE,
                     task=task,
+                )
+            elif name == "propose_create_tasks":
+                if set(raw) != {"tasks"} or not isinstance(raw["tasks"], list):
+                    return json.dumps({"error": "invalid_arguments"})
+                if not 1 <= len(raw["tasks"]) <= 10:
+                    return json.dumps(
+                        {"error": "invalid_batch_size", "maximum": 10}, ensure_ascii=False
+                    )
+                required = {"title", "category", "importance", "urgency"}
+                if any(
+                    not isinstance(item, dict) or not required <= item.keys()
+                    for item in raw["tasks"]
+                ):
+                    return json.dumps({"error": "incomplete_task_item"})
+                tasks = [TaskCreate.model_validate(item) for item in raw["tasks"]]
+                if any(not task.category for task in tasks):
+                    return json.dumps({"error": "incomplete_task_item"})
+                batch = self.service.create_agent_proposal_batch(
+                    self.user_id, self.run_id, call_id, tasks
+                )
+                return json.dumps(
+                    {
+                        "batch_id": batch.batch_id,
+                        "status": batch.status,
+                        "pending_count": sum(
+                            proposal.status == "pending" for proposal in batch.proposals
+                        ),
+                        "proposal_ids": [proposal.proposal_id for proposal in batch.proposals],
+                    },
+                    ensure_ascii=False,
                 )
             elif name == "propose_update_task":
                 body = ProposalCreateRequest(

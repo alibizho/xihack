@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
 import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
-import { fill, getLang, t, type Lang } from "../../shared/i18n.ts";
-import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposals, sendMessage, streamRun, withLocalContext, type Proposal } from "./agentApi";
+import { fill, getLang, t } from "../../shared/i18n.ts";
+import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposalBatches, getRunProposals, runProgressMessage, sendMessage, withLocalContext, type Proposal, type ProposalBatch, type Run } from "./agentApi";
 import { startAudioCapture, type AudioCapture, type CapturedAudio } from "./audioCapture";
 import { browserAsrIsReady, prepareBrowserAsr, transcribeBrowser } from "./speech/browserAsr";
+import { ProposalBatchReview } from "./ProposalBatchReview";
 import { ProposalCarousel } from "./ProposalCarousel";
 import "./TaskComposer.css";
 
@@ -27,21 +29,24 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
   const sessionId = useRef(0);
   const conversationId = useRef("");
   const conversationRequestId = useRef(crypto.randomUUID());
-  const pendingMessage = useRef({ content: "", payload: "", id: "", shown: false, language: "zh" as Lang });
+  const pendingMessage = useRef({ content: "", payload: "", id: "", shown: false, language: "zh" as "zh" | "en" });
   const inputRef = useRef("");
   const openedFromButton = useRef(false);
   const confirmKeys = useRef(new Map<string, string>());
-  const runAbort = useRef<AbortController | null>(null);
+  const runStream = useRef<EventSource | null>(null);
+  const reconnectTimer = useRef<number | null>(null);
+  const cancelRunWatch = useRef<(() => void) | null>(null);
+  const activeRunId = useRef("");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [proposalFocusId, setProposalFocusId] = useState<string>();
+  const [proposalBatches, setProposalBatches] = useState<ProposalBatch[]>([]);
+  const [progress, setProgress] = useState("");
+  const [liveAnswer, setLiveAnswer] = useState("");
   const [clarification, setClarification] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [runBusy, setRunBusy] = useState(false);
-  const [runPhase, setRunPhase] = useState("queued");
-  const [streamingReply, setStreamingReply] = useState("");
   const [preparing, setPreparing] = useState(false);
   const [listening, setListening] = useState(false);
 
@@ -55,7 +60,27 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     const fromButton = openedFromButton.current;
     openedFromButton.current = false;
     const session = fromButton ? sessionId.current : ++sessionId.current;
-    if (initialText) {
+    if (activeRunId.current) {
+      const runId = activeRunId.current;
+      setBusy(true);
+      setProgress(t("runReconnecting"));
+      void (async () => {
+        try {
+          let run = await getRun(runId);
+          if (!["completed", "failed", "cancelled"].includes(run.status)) run = await watchRun(runId, session);
+          else await loadRunResults(runId, session);
+          if (!active.current || session !== sessionId.current) return;
+          activeRunId.current = "";
+          setProgress("");
+          if (run.status === "completed") {
+            pendingMessage.current = { content: "", payload: "", id: "", shown: false, language: getLang() };
+            setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || t("errNoReply") }]);
+          } else setError(`${t("errRunFailed")}${run.error_code ? ` (${run.error_code})` : ""}`);
+        } catch (reason) {
+          if (active.current && session === sessionId.current && (reason as Error).message !== "run_watch_cancelled") setError((reason as Error).message || t("errRunFailed"));
+        } finally { if (active.current && session === sessionId.current) setBusy(false); }
+      })();
+    } else if (initialText) {
       inputRef.current = initialText;
       setInput(initialText);
       void send();
@@ -67,7 +92,11 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     return () => {
       active.current = false;
       sessionId.current++;
-      runAbort.current?.abort();
+      runStream.current?.close();
+      runStream.current = null;
+      if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+      cancelRunWatch.current?.();
       clearRecordingTimer();
       const current = capture.current;
       capture.current = null;
@@ -75,8 +104,6 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       setPreparing(false);
       setListening(false);
       setBusy(false);
-      setRunBusy(false);
-      setStreamingReply("");
       document.removeEventListener("visibilitychange", stop);
       document.removeEventListener("keydown", escape);
     };
@@ -84,7 +111,7 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
 
   function close() { orbButton.current?.focus(); onClose(); }
 
-  useEffect(() => { messageEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages, runBusy, streamingReply, runPhase]);
+  useEffect(() => { messageEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages, input, busy]);
 
   function openAndRecord() {
     active.current = true;
@@ -102,6 +129,128 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
   function clearRecordingTimer() {
     if (recordingTimer.current !== null) window.clearTimeout(recordingTimer.current);
     recordingTimer.current = null;
+  }
+
+  function loadRunResults(runId: string, session: number) {
+    return Promise.all([getRunProposalBatches(runId), getRunProposals(runId)]).then(([batches, proposalsFound]) => {
+      if (!active.current || session !== sessionId.current) return;
+      const batchProposalIds = new Set(batches.flatMap((batch) => batch.proposals.map((proposal) => proposal.proposal_id)));
+      setProposalBatches((current) => [...current.filter((batch) => !batches.some((item) => item.batch_id === batch.batch_id)), ...batches]);
+      const legacy = proposalsFound.filter((proposal) => !batchProposalIds.has(proposal.proposal_id));
+      setProposals((current) => mergeProposals(current, legacy));
+      const newestPending = [...legacy].reverse().find((proposal) => proposal.status === "pending");
+      if (newestPending) setProposalFocusId(newestPending.proposal_id);
+    });
+  }
+
+  function watchRun(runId: string, session: number): Promise<Run> {
+    return new Promise((resolve, reject) => {
+      let cursor = 0;
+      let settled = false;
+      let finishing = false;
+      const close = () => {
+        runStream.current?.close();
+        runStream.current = null;
+        if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      };
+      const finish = async () => {
+        if (finishing || settled) return;
+        finishing = true;
+        close();
+        try {
+          const run = await getRun(runId);
+          if (active.current && session === sessionId.current) await loadRunResults(runId, session);
+          settled = true;
+          cancelRunWatch.current = null;
+          resolve(run);
+        } catch (reason) {
+          settled = true;
+          cancelRunWatch.current = null;
+          reject(reason);
+        }
+      };
+      const isTerminal = (run: Run) => ["completed", "failed", "cancelled"].includes(run.status);
+      const terminalFromServer = async () => {
+        try {
+          const run = await getRun(runId);
+          if (isTerminal(run)) await finish();
+          else reconnect();
+        } catch { reconnect(); }
+      };
+      const connect = () => {
+        if (settled || !active.current || session !== sessionId.current) {
+          settled = true;
+          close();
+          reject(new Error("run_watch_cancelled"));
+          return;
+        }
+        const source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events?after=${cursor}`, { withCredentials: true });
+        runStream.current = source;
+        const readId = (event: Event) => {
+          const id = Number((event as MessageEvent).lastEventId);
+          if (Number.isInteger(id) && id > cursor) cursor = id;
+        };
+        source.addEventListener("run.progress", (event) => {
+          if (!active.current || session !== sessionId.current) return;
+          readId(event);
+          try {
+            const data = JSON.parse((event as MessageEvent).data) as { phase?: string; item_count?: number };
+            setProgress(runProgressMessage(data.phase || "", data.item_count));
+          } catch { /* Ignore malformed progress payloads. */ }
+        });
+        source.addEventListener("message.delta", (event) => {
+          if (!active.current || session !== sessionId.current) return;
+          readId(event);
+          try {
+            const text = JSON.parse((event as MessageEvent).data).text;
+            if (typeof text === "string") setLiveAnswer((current) => current + text);
+          } catch { /* Ignore malformed content events. */ }
+        });
+        source.addEventListener("run.snapshot", (event) => {
+          if (!active.current || session !== sessionId.current) return;
+          readId(event);
+          try {
+            const data = JSON.parse((event as MessageEvent).data) as { status?: string; last_event_sequence?: number; phase?: string };
+            cursor = Math.max(cursor, data.last_event_sequence || 0);
+            if (data.phase === "drafts_ready") setProgress(t("runDraftsReady"));
+            if (["completed", "failed", "cancelled"].includes(data.status || "")) void finish();
+          } catch { /* Ignore malformed snapshots. */ }
+        });
+        for (const eventName of ["run.completed", "run.failed", "run.cancelled"]) {
+          source.addEventListener(eventName, (event) => { readId(event); void finish(); });
+        }
+        source.addEventListener("run.status", (event) => {
+          if (!active.current || session !== sessionId.current) return;
+          readId(event);
+          try {
+            const data = JSON.parse((event as MessageEvent).data) as { status?: string };
+            if (["completed", "failed", "cancelled"].includes(data.status || "")) void finish();
+          } catch { /* Ignore status updates without a known schema. */ }
+        });
+        source.onerror = () => {
+          source.close();
+          if (runStream.current === source) runStream.current = null;
+          if (settled) return;
+          setProgress(t("runReconnecting"));
+          void terminalFromServer();
+        };
+      };
+      const reconnect = () => {
+        if (settled || reconnectTimer.current !== null) return;
+        reconnectTimer.current = window.setTimeout(() => {
+          reconnectTimer.current = null;
+          connect();
+        }, 1500);
+      };
+      cancelRunWatch.current = () => {
+        if (settled) return;
+        settled = true;
+        close();
+        reject(new Error("run_watch_cancelled"));
+      };
+      connect();
+    });
   }
 
   async function record(session = sessionId.current) {
@@ -189,9 +338,6 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     if (content.length > 8000) { setError(t("errTooLong")); return; }
     if (guestQuota && guestQuota.left <= 0) { setError(t("errGuestQuota")); return; }
     setBusy(true);
-    setRunBusy(true);
-    setRunPhase("queued");
-    setStreamingReply("");
     setError("");
     try {
       const token = await csrf();
@@ -202,9 +348,13 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       }
       if (session !== sessionId.current) return;
       const language = getLang();
-      if (pendingMessage.current.content !== content || pendingMessage.current.language !== language) pendingMessage.current = { content, payload: withLocalContext(content, language), id: crypto.randomUUID(), shown: false, language };
+      if (pendingMessage.current.content !== content || pendingMessage.current.language !== language) {
+        pendingMessage.current = { content, payload: withLocalContext(content, language), id: crypto.randomUUID(), shown: false, language };
+      }
       const { run_id } = await sendMessage(conversationId.current, pendingMessage.current.payload, pendingMessage.current.id, token);
       if (session !== sessionId.current) return;
+      activeRunId.current = run_id;
+      setProgress(t("runQueued"));
       if (guestQuota) guestQuota.spend();
       if (!pendingMessage.current.shown) {
         setMessages((current) => [...current, { role: "user", text: content }]);
@@ -214,49 +364,25 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       inputRef.current = "";
       lastAudio.current = null;
       setClarification("");
-      const controller = new AbortController();
-      runAbort.current?.abort();
-      runAbort.current = controller;
-      try {
-        await streamRun(run_id, {
-          onPhase: setRunPhase,
-          onText: (text) => setStreamingReply((current) => current + text),
-        }, controller.signal);
-      } catch (reason) {
-        if (reason instanceof DOMException && reason.name === "AbortError") return;
-        for (let attempt = 0; attempt < 360 && active.current && session === sessionId.current; attempt++) {
-          const current = await getRun(run_id);
-          setRunPhase(current.phase || current.status);
-          if (["completed", "failed", "cancelled"].includes(current.status)) break;
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
-      } finally { if (runAbort.current === controller) runAbort.current = null; }
-      if (!active.current || session !== sessionId.current) return;
-      const run = await getRun(run_id);
-      if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
-        const found = await getRunProposals(run_id);
-        setProposals((current) => mergeProposals(current, found));
-        const newestPending = [...found].reverse().find((proposal) => proposal.status === "pending");
-        if (newestPending) setProposalFocusId(newestPending.proposal_id);
-      }
+      const run = await watchRun(run_id, session);
+      if (session !== sessionId.current) return;
+      activeRunId.current = "";
+      setProgress("");
+      setLiveAnswer("");
       if (run.status === "completed") {
         pendingMessage.current = { content: "", payload: "", id: "", shown: false, language: getLang() };
         setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || t("errNoReply") }]);
-        setStreamingReply("");
         return;
       }
-      if (run.status === "failed" || run.status === "cancelled") {
-        pendingMessage.current = { content: "", payload: "", id: "", shown: false, language: getLang() };
-        setStreamingReply("");
-        throw new Error(`${t("errRunFailed")}${run.error_code ? ` (${run.error_code})` : ""}`);
-      }
-      throw new Error(t("errTimeout"));
+      pendingMessage.current = { content: "", payload: "", id: "", shown: false, language: getLang() };
+      throw new Error(`${t("errRunFailed")}${run.error_code ? ` (${run.error_code})` : ""}`);
     } catch (reason) {
       if (active.current && session === sessionId.current) {
+        if (activeRunId.current && !cancelRunWatch.current) activeRunId.current = "";
         if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
-        else { inputRef.current = content; setInput(content); setError((reason as Error).message); }
+        else if ((reason as Error).message !== "run_watch_cancelled") { inputRef.current = content; setInput(content); setError((reason as Error).message); }
       }
-    } finally { if (active.current && session === sessionId.current) { setBusy(false); setRunBusy(false); setStreamingReply(""); } }
+    } finally { if (active.current && session === sessionId.current) setBusy(false); }
   }
 
   async function decide(proposal: Proposal, accept: boolean) {
@@ -284,11 +410,13 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
     {!preparing && lastAudio.current && input && <button className="voice-chat-note voice-enhance" type="button" onClick={() => void retryEnhancedTranscription()}>{t("enhancedRecognition")}</button>}
-    {(messages.length > 0 || runBusy || streamingReply) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
-      {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
-      {runBusy && (streamingReply
-        ? <p className="voice-chat-bubble assistant">{streamingReply}<span className="assistant-stream-caret" aria-hidden="true" /></p>
-        : <p className="voice-chat-bubble assistant voice-assistant-status" role="status"><span className="assistant-status-dot" aria-hidden="true" />{runPhase === "searching_tasks" ? t("assistantSearching") : runPhase === "answering" ? t("assistantReplying") : runPhase === "thinking" || runPhase === "starting" ? t("assistantThinking") : t("assistantProcessing")}</p>)}
+    {(messages.length > 0 || proposals.length > 0 || proposalBatches.length > 0 || progress || liveAnswer) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
+      {messages.map((message, index) => message.role === "assistant"
+        ? <div key={index} className="voice-chat-bubble assistant"><Markdown>{message.text}</Markdown></div>
+        : <p key={index} className="voice-chat-bubble user">{message.text}</p>)}
+      {liveAnswer && <div className="voice-chat-bubble assistant"><Markdown>{liveAnswer}</Markdown></div>}
+      {progress && <p className="voice-run-progress" role="status">{progress}</p>}
+      <ProposalBatchReview batches={proposalBatches} onChange={(batch) => setProposalBatches((current) => current.map((item) => item.batch_id === batch.batch_id ? batch : item))} onTasksChanged={onTasksChanged} disabled={busy} />
       <div ref={messageEnd} />
     </div>}
     <ProposalCarousel proposals={proposals} busy={busy} focusProposalId={proposalFocusId} onDecide={(proposal, accept) => void decide(proposal, accept)} />

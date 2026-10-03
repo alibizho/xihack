@@ -120,12 +120,13 @@ task_id 由服务端生成。importance 和 urgency 独立保存为 0.0–10.0�
 | POST /api/conversations/{conversation_id}/messages | 原子保存用户消息并排队 Agent run，返回 202 |
 | GET /api/runs/{run_id} | 读取当前账号 run 状态、最终可见回复及错误码 |
 | GET /api/runs/{run_id}/events | 以 `text/event-stream` 订阅持久事件，支持 `Last-Event-ID` 或 `after` 序号续接 |
+| GET /api/runs/{run_id}/proposal-batches | 读取当前账号该 run 的结构化审核批次 |
 
 发送请求包含 `client_message_id`（1–128 字符）及 `content`（非空，最长 8000 字符），不接受 user_id。成功响应为 `{run_id,status,created_at,replayed}`。同一账号重用 message ID 且 conversation/content 相同，返回原 run；请求指纹不同返回 409 `IDEMPOTENCY_CONFLICT`。对话必须属于当前账号；消息和 run 在同一数据库事务中创建。只保存用户消息与最终助手可见回复，不保存 Tool 参数/返回值或模型内部推理。
 
 消息 POST 校验 Origin 与 `X-CSRF-Token`。提交限流为每账号 10 次/小时、最多 2 个并发 run；每 IP 30 次/小时；全局 10 次/分钟。超限返回 429。每 run 最多 16 次模型请求、16 次只读 Tool 调用、180 秒、64K 输入与 8K 输出 tokens。金额硬上限另在供应商控制台配置，部署阶段再次核对。
 
-事件按 run 单调递增序号持久化到 PostgreSQL；SSE `id` 与序号一致，断开连接不取消 run。事件仅含用户可见状态和回答片段：
+事件按 run 单调递增序号持久化到 PostgreSQL；SSE `id` 与序号一致，断开连接不取消 run。`run.progress` 仅报告 Runtime 已进入的阶段及可核实的项目数：`organizing_request`、实际只读查询时的 `checking_tasks`、实际批次提交时的 `preparing_drafts` 和数据库保存成功后的 `drafts_ready`。事件不含模型推理、原始工具参数或内部错误。`message.delta` 只包含最终用户可见回复。安全诊断事件 `run.tool_duplicate` 只记录同轮精确重复次数，不提供工具参数；UI 不把它当作用户进度展示。
 
     event: run.started
     data: {"run_id":"run_123","sequence":1}
@@ -142,7 +143,7 @@ task_id 由服务端生成。importance 和 urgency 独立保存为 0.0–10.0�
     event: run.completed
     data: {"run_id":"run_123","assistant_message_id":"message_456","sequence":5}
 
-阶段 4 事件类型：`run.status`（`queued`、`thinking`、`searching_tasks`、`answering`）、`run.started`、`message.delta`、`run.completed`、`run.failed`、`run.snapshot`。事件最多保留 7 天；游标早于仍保留的最早序号时先发 `run.snapshot`（含当前状态、最终回复和最新序号），随后从该序号继续。游标无效返回 422。`GET /api/runs/{run_id}` 可在任何时候读取当前状态。跨账号 run ID 统一 404。
+阶段 4 事件包括 `run.started`、`run.progress`、`message.delta`、`run.completed`、`run.failed`、`run.snapshot` 及安全诊断事件。事件最多保留 7 天；游标早于仍保留的最早序号时先发 `run.snapshot`（含当前状态、最终回复和最新序号），随后从该序号继续。游标无效返回 422。`GET /api/runs/{run_id}` 可在任何时候读取当前状态。跨账号 run ID 统一 404。
 
 Worker 由 `uv run python -m assistant_backend.worker` 启动，使用数据库 lease 与 `SKIP LOCKED` 领取 queued run。重启后 queued run 可继续领取；lease 过期的 in-progress run 收敛为 `failed/WORKER_INTERRUPTED`，不重放可能已经计费的模型调用。失败时保留用户消息并提供安全错误码。对话永久删除通过外键级联清理 run/event/message；worker 每次写事件或助手回复前锁定并复核对话仍存在，防止删除后复活数据；任务表不关联对话，任务不会被删除。阶段 4 没有显式取消 run API，SSE 断开仅停止订阅。
 
@@ -152,6 +153,11 @@ Worker 由 `uv run python -m assistant_backend.worker` 启动，使用数据库 
 |---|---|
 | POST /api/proposals | 保存手动创建、更新、完成或删除任务的待确认意图，不修改任务 |
 | GET /api/runs/{run_id}/proposals | 列出当前账号该 Agent run 保存的提案，供前端逐项确认 |
+| GET /api/runs/{run_id}/proposal-batches | 按后端持久化的批次 ID 返回 Agent 批次及完整提案项 |
+| GET /api/proposal-batches/{batch_id} | 读取当前账号的批次与所有提案状态 |
+| PATCH /api/proposal-batches/{batch_id}/items/{proposal_id} | 确认前更正此账号 pending 且未过期的批次创建项 |
+| POST /api/proposal-batches/{batch_id}/items/{proposal_id}/cancel | 从待提交项中移除此账号 pending 且未过期的单项 |
+| POST /api/proposal-batches/{batch_id}/confirm | 在一个事务中确认并创建当前批次所有剩余 pending 项 |
 | POST /api/tasks/{task_id}/report | 已完成事务提交一份文字复盘；先保存原文，再尝试生成摘要、阻碍和下次行动 |
 | GET /api/tasks/{task_id}/report | 读取当前账号的原文、分析字段及状态 |
 | GET /api/proposals/{proposal_id} | 读取当前账号提案预览与状态 |
@@ -159,6 +165,14 @@ Worker 由 `uv run python -m assistant_backend.worker` 启动，使用数据库 
 | POST /api/proposals/{proposal_id}/cancel | 用户取消提案 |
 
 阶段 2 的手动提案请求含 `client_request_id`、`operation`（`create`/`update`/`complete`/`delete`）；创建提供 `task`，更新提供 `task_id`、`expected_version`、`changes`，完成与删除提供 `task_id`、`expected_version`。同账号重用 `client_request_id` 且内容相同返回同一提案，不同则 409。确认 JSON 正文携带 `idempotency_key`；同一键重复确认返回原回执，异键返回 409。提案 15 分钟有效，确认时重查归属、状态、期限和任务版本，删除会使该任务其他待确认提案失效。手动提案不带 conversation_id；Agent 接入留到阶段 5。所有提案写请求校验 Origin 和 `X-CSRF-Token`，账号来自 Cookie。LLM 输出提案不表示事务已经写入；只有提交成功的数据库回执才能作为成功响应。
+
+#### Agent 批量创建与确认
+
+Agent 多任务创建通过单个内部 `propose_create_tasks({tasks:[...]})` Tool，数组必须包含 1–10 项。每个 item 使用现有任务字段，额外字段一律拒绝；标题、分类、0–10/0.1 分数、描述与日期结构按现有 `TaskCreate` 校验。任一项无效时整批不落库。一次 Application 数据库事务创建 `proposal_batches` 记录和整组 pending `proposals`；批次保存 `batch_id`、run、账号、请求指纹、到期时间、确认幂等散列与批量回执。
+
+同一 run/tool_call_id 的规范化请求重放返回原批次，正文不同返回 409 `IDEMPOTENCY_CONFLICT`。旧 `GET /api/runs/{run_id}/proposals` 保持 list 响应兼容，仍返回该 run 的所有 Agent proposal；批次 UI 使用新增分组接口，不由前端推断或拼凑 batch ID。
+
+单项 PATCH 请求正文是完整任务字段对象（与 `TaskCreate` 一致）。编辑和取消都检查认证账号、批次/提案关联、pending 状态及 15 分钟有效期；它们只修改草稿。取消单项后，整批确认其余 pending 项；空批次不能确认，返回 409 `PROPOSAL_BATCH_EMPTY`。批次确认请求 `{ "idempotency_key": "..." }`：先锁定账号所有的批次及其提案，再复查所有剩余 pending 状态和期限；过期返回 409 `PROPOSAL_EXPIRED`。所有任务创建、提案状态和单个批量回执在同一事务中完成，任一失败完整回滚。相同确认键重试回放原 receipt，不同键返回 409 `IDEMPOTENCY_CONFLICT`。批次项不能调用单 proposal 确认接口（409 `PROPOSAL_BATCH_CONFIRM_REQUIRED`）；原手动单项 API 不变。对批次的读取、编辑、移除和确认均按账号归属；所有写操作要求 Origin 与 CSRF。
 
 完成报告请求为 `{ "body": "..." }`，限 1–2000 字，仅已完成事务可提交，每件事务一份；重复提交相同正文返回原报告，不同正文返回 `409 REPORT_EXISTS`。原文先持久化；模型分析失败时返回 `pending`，相同请求可重试，最多分析三次，然后状态为 `unavailable`。成功时 `status=analyzed`，返回 `summary`、`blocker`、`next_step`。报告随事务永久删除；Agent 的 `search_task_reports` 只读取本账号已有的分析字段，用于后续推荐，不向模型提供其他账号报告。
 

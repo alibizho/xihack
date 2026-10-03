@@ -3,7 +3,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-from uuid import uuid4
 
 from pydantic import SecretStr
 
@@ -169,13 +168,24 @@ class ChatCompletionClient:
                                 index = int(part["index"])
                                 aggregate = call_parts.setdefault(index, ToolCallDelta(index=index))
                                 if part.get("id"):
-                                    aggregate.call_id = self._merge_fragment(aggregate.call_id, part["id"])
+                                    aggregate.call_id = self._merge_fragment(
+                                        aggregate.call_id, part["id"]
+                                    )
                                 function = part.get("function") or {}
                                 if function.get("name"):
-                                    aggregate.name = self._merge_fragment(aggregate.name, function["name"])
+                                    aggregate.name = self._merge_fragment(
+                                        aggregate.name, function["name"]
+                                    )
                                 if function.get("arguments"):
                                     aggregate.arguments += function["arguments"]
-                                current_calls.append(ToolCallDelta(index=index, call_id=part.get("id", ""), name=function.get("name", ""), arguments=function.get("arguments", "")))
+                                current_calls.append(
+                                    ToolCallDelta(
+                                        index=index,
+                                        call_id=part.get("id", ""),
+                                        name=function.get("name", ""),
+                                        arguments=function.get("arguments", ""),
+                                    )
+                                )
                             finish_reason = choice.get("finish_reason") or finish_reason
                             if finish_reason == "length":
                                 raise ProviderFailure("MODEL_TRUNCATED_RESPONSE", True)

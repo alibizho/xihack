@@ -17,7 +17,20 @@ from assistant_backend.config import Settings
 
 class FakeResponse(io.BytesIO):
     def __init__(self, value: dict) -> None:
-        super().__init__(json.dumps(value).encode())
+        choice = value["choices"][0]
+        message = choice.get("message") or {}
+        delta: dict = {"content": message.get("content") or ""}
+        if message.get("tool_calls"):
+            delta["tool_calls"] = [
+                {"index": index, **tool_call}
+                for index, tool_call in enumerate(message["tool_calls"])
+            ]
+        chunk = {
+            "choices": [{"delta": delta, "finish_reason": choice.get("finish_reason") or "stop"}],
+            "usage": value.get("usage", {}),
+        }
+        body = f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n"
+        super().__init__(body.encode())
 
     def __enter__(self) -> "FakeResponse":
         return self
@@ -71,8 +84,7 @@ def test_mimo_client_parses_tool_response_and_keeps_api_key_in_header(monkeypatc
     request_body = json.loads(seen["request"].data)
     assert request_body["model"] == "mimo-v2.6-flash"
     assert request_body["max_completion_tokens"] == 8
-    assert request_body["stream"] is False
-    assert request_body["thinking"] == {"type": "enabled"}
+    assert request_body["stream"] is True
 
 
 @pytest.mark.parametrize(
@@ -176,7 +188,7 @@ def test_mimo_is_selected_even_when_other_gateway_key_exists(monkeypatch) -> Non
     assert "keyword" not in search["parameters"]["required"]
     assert "anyOf" in create["parameters"]["properties"]["task"]["properties"]["due"]
     assert "category" in create["parameters"]["properties"]["task"]["required"]
-    assert body["thinking"] == {"type": "enabled"}
+    assert body["stream"] is True
     assert (
         next(tool for tool in tools if tool["function"]["name"] == "search_tasks")["function"][
             "strict"
@@ -224,3 +236,20 @@ def test_create_proposal_requires_interpreted_fields_before_saving() -> None:
         "importance",
         "urgency",
     }
+
+
+def test_batch_creation_tool_schema_is_bounded_and_forbids_extra_fields() -> None:
+    create = next(
+        tool["function"]
+        for tool in TASK_TOOLS
+        if tool["function"]["name"] == "propose_create_tasks"
+    )
+    tasks = create["parameters"]["properties"]["tasks"]
+    assert tasks["type"] == "array"
+    assert tasks["minItems"] == 1
+    assert tasks["maxItems"] == 10
+    item = tasks["items"]
+    assert item["additionalProperties"] is False
+    assert set(item["required"]) == {"title", "category", "importance", "urgency"}
+    assert "description" in item["properties"]
+    assert "due" in item["properties"]

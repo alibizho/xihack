@@ -10,6 +10,11 @@ const errors: Record<string, () => string> = {
   RATE_LIMITED: () => t("errRateLimited"),
   RUN_LIMIT_REACHED: () => t("errRunLimit"),
   INVALID_REQUEST: () => t("errInvalidRequest"),
+  PROPOSAL_EXPIRED: () => t("batchExpired"),
+  PROPOSAL_BATCH_EMPTY: () => t("batchEmpty"),
+  PROPOSAL_BATCH_CONFIRM_REQUIRED: () => t("batchConfirmRequired"),
+  PROPOSAL_UNAVAILABLE: () => t("batchUnavailable"),
+  IDEMPOTENCY_CONFLICT: () => t("batchIdempotencyConflict"),
 };
 
 export class ApiRequestError extends Error {
