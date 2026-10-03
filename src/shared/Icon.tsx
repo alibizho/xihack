@@ -6,6 +6,7 @@ export type IconName =
   | "focus"
   | "mic"
   | "arrow"
+  | "chevronDown"
   | "plus"
   | "close"
   | "check"
@@ -14,6 +15,7 @@ export type IconName =
   | "refresh"
   | "user";
 const icons: Record<IconName, ReactNode> = {
+  chevronDown: <path d="m6 9 6 6 6-6" />,
   home: (
     <>
       <rect x="3" y="3" width="7" height="7" rx="1.5" />

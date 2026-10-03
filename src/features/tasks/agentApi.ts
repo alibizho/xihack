@@ -35,7 +35,7 @@ export async function listTasks(): Promise<ServerTask[]> {
 }
 
 export const calibrate = async (text: string, token: string) => post<SpeechDraft>("/transcriptions", { text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, token);
-export const createConversation = (token: string, requestId: string) => post<{ conversation_id: string }>("/conversations", { client_request_id: requestId, title: "语音对话" }, token);
+export const createConversation = (token: string, requestId: string) => post<{ conversation_id: string }>("/conversations", { client_request_id: requestId, title: "新对话" }, token);
 // ponytail: keep local time in the saved message until runs have separate context metadata.
 export function withLocalContext(text: string): string {
   const now = new Date();
