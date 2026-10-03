@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { cellFeedback, shuffledBoard, shuffledColors } from "./trainingGame.ts";
-import { circularSegments } from "./circularBoard.ts";
+import { circularSegments, ringRotation } from "./circularBoard.ts";
 
 test("board has 1–25 once and difficulty feedback follows the rules", () => {
   const board = shuffledBoard(() => 0.37);
@@ -31,4 +31,13 @@ test("circular board gives every number one finite segment", () => {
     assert.ok(!segment.path.includes("NaN"));
     assert.ok(Number.isFinite(segment.x) && Number.isFinite(segment.y));
   }
+});
+
+test("circle rings alternate direction and turn farther at harder levels", () => {
+  assert.equal(ringRotation("beginner", 0, 0), 0);
+  assert.equal(ringRotation("beginner", 0, 1), 90);
+  assert.equal(ringRotation("beginner", 1, 1), -45);
+  assert.equal(ringRotation("beginner", 2, 1), 360 / 13);
+  assert.equal(ringRotation("normal", 0, 1), 180);
+  assert.equal(ringRotation("advanced", 1, 2), -270);
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { priorityScore, type Task } from "../tasks/mockTasks";
 import { cellFeedback, shuffledBoard, shuffledColors, type Difficulty } from "./trainingGame";
-import { circularSegments } from "./circularBoard";
+import { circularRingSizes, circularSegments, ringRotation } from "./circularBoard";
 import { Icon } from "../../shared/Icon";
 import { fill, t, uiLocale } from "../../shared/i18n.ts";
 import "./TrainingPage.css";
@@ -18,6 +18,11 @@ const modes: { id: Difficulty; name: () => string; detail: () => string }[] = [
   { id: "normal", name: () => t("modeNormal"), detail: () => t("modeNormalDetail") },
   { id: "advanced", name: () => t("modeAdvanced"), detail: () => t("modeAdvancedDetail") },
 ];
+const circleDetails: Record<Difficulty, () => string> = {
+  beginner: () => t("circleBeginnerDetail"),
+  normal: () => t("circleNormalDetail"),
+  advanced: () => t("circleAdvancedDetail"),
+};
 const formatTime = (seconds: number) => seconds.toFixed(1) + t("secondShort");
 const pendingReviews = new Set<string>();
 const roundsStorageKey = "xihack-demo-rounds";
@@ -43,6 +48,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
   const [phase, setPhase] = useState<"idle" | "countdown" | "playing" | "finished" | "interrupted">("idle");
   const [board, setBoard] = useState<number[]>(() => shuffledBoard());
   const [gridColors, setGridColors] = useState<string[]>(() => shuffledColors());
+  const [circleTaps, setCircleTaps] = useState(0);
   const [countdown, setCountdown] = useState(3);
   const [target, setTarget] = useState(1);
   const [mistakes, setMistakes] = useState(0);
@@ -111,6 +117,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     completed.current = false;
     setBoard(shuffledBoard());
     setGridColors(shuffledColors());
+    setCircleTaps(0);
     setTarget(1);
     setMistakes(0);
     setTaps([]);
@@ -145,7 +152,8 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     }
   }
   function tap(number: number) {
-    if (phase !== "playing" || completed.current) return;
+    if (phase !== "playing") return;
+    if (variant === "circle") setCircleTaps((value) => value + 1);
     if (number !== target) { setMistakes((value) => value + 1); return; }
     const seconds = (performance.now() - startAt.current) / 1000;
     const nextTaps = [...taps, seconds];
@@ -167,13 +175,18 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
     <header className="training-intro"><span className="section-kicker">{t("trainingKicker")}</span><h1>{t("countFrom1to25")}</h1><p>{t("pickDifficulty")}</p></header>
     <div className="variant-picker" role="group" aria-label={t("variantAria")}>{variants.map((item) => <button key={item.id} className={variant === item.id ? "selected" : ""} aria-pressed={variant === item.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setVariant(item.id)}>{item.name()}</button>)}</div>
     <div className="difficulty-picker" role="group" aria-label={t("difficultyAria")}>{modes.map((mode) => <button key={mode.id} className={difficulty === mode.id ? "selected" : ""} aria-pressed={difficulty === mode.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setDifficulty(mode.id)}>{mode.name()}</button>)}</div>
-    <p className="difficulty-detail" aria-live="polite">{modes.find((mode) => mode.id === difficulty)?.detail()}</p>
+    <p className="difficulty-detail" aria-live="polite">{variant === "circle" ? circleDetails[difficulty]() : modes.find((mode) => mode.id === difficulty)?.detail()}</p>
     <section className="training-surface" aria-label={variant === "circle" ? t("circleBoardAria") : t("boardAria")}>
       <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? fill("nextNumber", { n: target }) : phase === "playing" ? fill("doneCount", { n: target - 1 }) : modes.find((mode) => mode.id === difficulty)?.name()}</span><strong>{formatTime(elapsed)}</strong></div>
       {phase !== "idle" && <div className="board-wrap" ref={boardWrap}>
         {variant === "grid" ? <div className={`training-board ${phase === "countdown" ? "is-hidden" : ""}`}>{board.map((number, index) => <button key={number} className={`training-cell ${gridColors[index]} ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} onClick={() => tap(number)} disabled={phase !== "playing"} aria-label={fill("numberAria", { n: number })}>{number}</button>)}</div>
           : <svg className={`circular-board ${phase === "countdown" ? "is-hidden" : ""}`} viewBox="0 0 500 500" role="group" aria-label={t("circleBoardAria")}>
-            {circular.map(({ number, color, path, x, y }) => <g key={number} className={`circular-segment ${color} ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} role="button" tabIndex={phase === "playing" ? 0 : -1} aria-label={fill("numberAria", { n: number })} aria-disabled={phase !== "playing"} onClick={() => tap(number)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); tap(number); } }}><path d={path} /><text x={x} y={y} dominantBaseline="central" textAnchor="middle">{String(number).padStart(2, "0")}</text></g>)}
+            {circularRingSizes.map((_, ring) => {
+              const angle = ringRotation(difficulty, ring, circleTaps);
+              return <g key={ring} className="circular-ring" style={{ transform: `rotate(${angle}deg)` }}>
+                {circular.filter((segment) => segment.ring === ring).map(({ number, color, path, x, y }) => <g key={number} className={`circular-segment ${color} ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} role="button" tabIndex={phase === "playing" ? 0 : -1} aria-label={fill("numberAria", { n: number })} aria-disabled={phase !== "playing"} onClick={() => tap(number)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); tap(number); } }}><path d={path} /><text x={x} y={y} dominantBaseline="central" textAnchor="middle" style={{ transform: `rotate(${-angle}deg)` }}>{String(number).padStart(2, "0")}</text></g>)}
+              </g>;
+            })}
             <g aria-hidden="true"><circle className="circular-hub" cx="250" cy="250" r="34" /><path className="circular-crosshair" d="M 250 231 V 269 M 231 250 H 269" /><circle className="circular-dot" cx="250" cy="250" r="5" /></g>
           </svg>}
         {phase === "countdown" && <div className="board-overlay" aria-live="polite">{countdown}</div>}
