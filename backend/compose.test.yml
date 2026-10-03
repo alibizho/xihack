@@ -1,0 +1,18 @@
+name: shixu-stage1-test
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: shixu
+      POSTGRES_PASSWORD: shixu_test_password
+      POSTGRES_DB: shixu_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shixu -d shixu"]
+      interval: 2s
+      timeout: 2s
+      retries: 20

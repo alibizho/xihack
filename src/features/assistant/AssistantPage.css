@@ -1,0 +1,41 @@
+.assistant-page { max-width: 1100px; margin: auto; animation: view-enter .32s ease both; }
+.assistant-intro { padding: 30px 3px 24px; color: #fffdf5; }
+.assistant-intro h1 { margin: 10px 0; font-size: clamp(30px, 5vw, 42px); }
+.assistant-intro p { margin: 0; opacity: .86; line-height: 1.6; }
+.assistant-empty, .assistant-layout { background: var(--paper); border: 1px solid #e1e8e6; box-shadow: 0 12px 32px #28495a25; }
+.assistant-empty { padding: 28px; }
+.assistant-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 520px; }
+.assistant-sidebar { border-right: 1px solid #e1e8e6; padding: 18px; display: flex; flex-direction: column; gap: 7px; }
+.assistant-sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.assistant-sidebar .button { padding: 8px; min-height: 36px; font-size: 12px; }
+.assistant-conversation { display: flex; align-items: center; min-width: 0; min-height: 44px; color: var(--ink); }
+.assistant-conversation:hover { background: #f1f5f2; }
+.assistant-conversation.selected { background: #e8f0ef; color: var(--blue-dark); font-weight: 700; }
+.assistant-conversation-title { flex: 1; min-width: 0; text-align: left; padding: 10px; border: 0; background: transparent; color: inherit; font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.assistant-conversation-rename { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin-right: 4px; border: 0; background: transparent; color: var(--blue-dark); cursor: pointer; }
+.assistant-conversation-rename:hover { background: #dce9e7; }
+.assistant-conversation-rename:disabled { opacity: .45; cursor: wait; }
+.assistant-conversation-title:focus-visible, .assistant-conversation-rename:focus-visible, .assistant-rename button:focus-visible, .assistant-rename input:focus-visible { outline: 2px solid var(--blue-dark); outline-offset: 2px; }
+.assistant-rename { width: 100%; display: grid; gap: 6px; padding: 8px; }
+.assistant-rename input { min-width: 0; width: 100%; box-sizing: border-box; padding: 7px; border: 1px solid #9dbeb9; background: #fff; color: var(--ink); font: inherit; font-size: 16px; }
+.assistant-rename-actions { display: flex; gap: 10px; }
+.assistant-rename-actions button { padding: 3px 0; border: 0; background: transparent; color: var(--blue-dark); font: inherit; font-size: 13px; cursor: pointer; }
+.assistant-rename-actions button:disabled { opacity: .5; cursor: wait; }
+.assistant-rename p { margin: 0; color: #a23431; font-size: 12px; font-weight: 400; }
+.assistant-chat { min-width: 0; display: flex; flex-direction: column; padding: 24px; }
+.assistant-chat h2 { margin: 0; font-size: 20px; }
+.assistant-chat h2 { overflow-wrap: anywhere; }
+.assistant-messages { flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 22px 0; }
+.assistant-message { padding: 13px 16px; max-width: 90%; background: #edf2ee; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.assistant-message.user { align-self: flex-end; background: #dce9ea; }
+.assistant-message span { color: var(--blue-dark); font-size: 12px; font-weight: 700; }
+.assistant-message p { margin: 5px 0 0; }
+.assistant-proposal { display: grid; justify-items: start; gap: 8px; padding: 15px; border: 1px solid #9dbeb9; background: #f2f7f4; }
+.assistant-proposal strong { color: var(--blue-dark); }
+.assistant-proposal span { font-size: 13px; overflow-wrap: anywhere; }
+.assistant-placeholder { color: var(--muted); font-size: 13px; }
+.assistant-chat form { display: grid; gap: 10px; }
+.assistant-chat form label { font-size: 12px; font-weight: 700; }
+.assistant-chat textarea { resize: vertical; min-height: 88px; border: 1px solid #cedbd8; padding: 12px; font: inherit; }
+.assistant-chat form .button { justify-self: end; }
+@media (max-width: 700px) { .assistant-intro { padding: 18px 2px 22px; } .assistant-layout { grid-template-columns: 1fr; } .assistant-sidebar { border-right: 0; border-bottom: 1px solid #e1e8e6; max-height: 185px; overflow-y: auto; } .assistant-chat { padding: 18px; min-height: 420px; } }

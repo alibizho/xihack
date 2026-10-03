@@ -12,6 +12,7 @@ const quadrants = [
 ];
 const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
 type Props = {
+  accountMode?: boolean;
   tasks: Task[];
   initialDay?: string;
   toggle: (id: string) => void;
@@ -20,7 +21,7 @@ type Props = {
   editTask: (task: Task) => void;
 };
 
-export function TasksPage({ tasks, initialDay, toggle, updateScore, openComposer, editTask }: Props) {
+export function TasksPage({ accountMode = false, tasks, initialDay, toggle, updateScore, openComposer, editTask }: Props) {
   const [view, setView] = useState<"cards" | "matrix">("cards");
   const [showDone, setShowDone] = useState(false);
   const [selectedDay, setSelectedDay] = useState(initialDay ?? localDate(new Date()));
@@ -39,7 +40,7 @@ export function TasksPage({ tasks, initialDay, toggle, updateScore, openComposer
   }
 
   return <div className="tasks-page">
-    <header className="tasks-intro"><div><h1>把事情排好顺序</h1><p>{openCount} 件待办 · 按日期与时间查看</p></div><button className="button button-primary" onClick={() => openComposer(true)} aria-label="语音添加"><Icon name="mic" size={18} /> 语音添加</button></header>
+    <header className="tasks-intro"><div><h1>把事情排好顺序</h1><p>{openCount} 件待办 · {accountMode ? "账号事务" : "浏览器演示事务"}</p></div><button className="button button-primary" onClick={() => openComposer(true)} aria-label="语音添加"><Icon name="mic" size={18} /> 语音添加</button></header>
     <div className="task-workspace">
       <div className="task-add-row"><strong>事务日程</strong><button className="button button-primary" onClick={() => openComposer(false)}><Icon name="plus" size={17} /> 添加事务</button></div>
       {view === "cards" && <div className="date-picker"><div className="date-picker-head"><strong>{new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long" }).format(center)}</strong><div className="date-picker-actions"><button className="week-step" onClick={() => changeWeek(-1)} aria-label="前一周">‹</button><button className="week-step" onClick={() => changeWeek(1)} aria-label="后一周">›</button><button className={selectedDay ? "unscheduled-button" : "unscheduled-button selected"} onClick={() => setSelectedDay("")}>未安排 {matching.filter((task) => !parseDue(task.due).date).length}</button></div></div><div className="date-strip" role="group" aria-label="事务日期">{dates.map((date) => {
@@ -56,10 +57,10 @@ export function TasksPage({ tasks, initialDay, toggle, updateScore, openComposer
           {ordered.map((task, index) => <div className="task-slide" data-task-id={task.id} key={task.id}><div className="task-timeline" aria-hidden="true"><span>{parseDue(task.due).time || "待定"}</span><i /><small>{String(index + 1).padStart(2, "0")}</small></div><article className="priority-card" aria-label={`事务 ${index + 1}：${task.title}`}>
             <div className="priority-card-top"><span className="card-count">{String(index + 1).padStart(2, "0")} / {String(ordered.length).padStart(2, "0")}</span><span className="priority-total">排序分 <strong>{priorityScore(task).toFixed(1)}</strong></span></div>
             <h2>{task.title}</h2><p className="card-due">{formatDue(task.due)} · {task.category}</p>
-            {(["importance", "urgency"] as const).map((axis) => <div className={`score-control ${axis}`} key={axis}><div className="score-heading"><label htmlFor={`${axis}-${task.id}`}>{axis === "importance" ? "重要度" : "紧急度"}</label><output>{task[axis].toFixed(1)} <small>/ 10</small></output></div><input id={`${axis}-${task.id}`} type="range" min="0" max="10" step="0.1" value={task[axis]} onChange={(event) => updateScore(task.id, axis, Number(event.target.value))} style={{ background: `linear-gradient(to right, ${axis === "importance" ? "#426b82" : "#bd687d"} ${task[axis] * 10}%, #dce4e4 ${task[axis] * 10}%)` }} /><p>{task[axis === "importance" ? "importanceReason" : "urgencyReason"]}</p></div>)}
-            <div className="card-actions"><button className="button button-outline" onClick={() => editTask(task)}>编辑详情</button><button className="button button-primary" onClick={() => toggle(task.id)}><Icon name="check" size={18} /> {task.done ? "恢复待办" : "标记完成"}</button></div>
+            {(["importance", "urgency"] as const).map((axis) => accountMode ? <div className={`score-control ${axis}`} key={axis}><div className="score-heading"><span>{axis === "importance" ? "重要" : "紧急"}</span><strong>{task[axis] >= 6 ? "是" : "否"}</strong></div></div> : <div className={`score-control ${axis}`} key={axis}><div className="score-heading"><label htmlFor={`${axis}-${task.id}`}>{axis === "importance" ? "重要度" : "紧急度"}</label><output>{task[axis].toFixed(1)} <small>/ 10</small></output></div><input id={`${axis}-${task.id}`} type="range" min="0" max="10" step="0.1" value={task[axis]} onChange={(event) => updateScore(task.id, axis, Number(event.target.value))} style={{ background: `linear-gradient(to right, ${axis === "importance" ? "#426b82" : "#bd687d"} ${task[axis] * 10}%, #dce4e4 ${task[axis] * 10}%)` }} /><p>{task[axis === "importance" ? "importanceReason" : "urgencyReason"]}</p></div>)}
+            <div className="card-actions">{!(accountMode && task.done) && <button className="button button-outline" onClick={() => editTask(task)}>编辑详情</button>}{!(accountMode && task.done) && <button className="button button-primary" onClick={() => toggle(task.id)}><Icon name="check" size={18} /> {task.done ? "恢复待办" : "标记完成"}</button>}</div>
           </article></div>)}
         </div> : <div className="empty-state">{selectedDay ? "这一天还没有事务，换个日期或添加一件事。" : "还没有未安排的事务。"}</div>}
-      </section> : <div className="matrix-workspace"><p className="matrix-note">全部{showDone ? "已完成" : "待办"}事务 · 重要度与紧急度以 6.0 为分界</p><div className="matrix" aria-label="重要度与紧急度四象限">{quadrants.map((section) => <section className={`quadrant q-${section.id}`} key={section.id}><div className="quadrant-heading"><div><h2>{section.title}</h2><span>{section.action}</span></div><strong>{matching.filter((task) => quadrant(task) === section.id).length}</strong></div><div className="quadrant-body">{matching.filter((task) => quadrant(task) === section.id).sort((a, b) => priorityScore(b) - priorityScore(a)).map((task) => <TaskRow key={task.id} task={task} toggle={toggle} edit={() => editTask(task)} />)}</div></section>)}</div></div>}
+      </section> : <div className="matrix-workspace"><p className="matrix-note">全部{showDone ? "已完成" : "待办"}事务 · {accountMode ? "按重要 / 紧急分类" : "重要度与紧急度以 6.0 为分界"}</p><div className="matrix" aria-label="重要度与紧急度四象限">{quadrants.map((section) => <section className={`quadrant q-${section.id}`} key={section.id}><div className="quadrant-heading"><div><h2>{section.title}</h2><span>{section.action}</span></div><strong>{matching.filter((task) => quadrant(task) === section.id).length}</strong></div><div className="quadrant-body">{matching.filter((task) => quadrant(task) === section.id).sort((a, b) => priorityScore(b) - priorityScore(a)).map((task) => <TaskRow key={task.id} task={task} toggle={toggle} edit={accountMode && task.done ? undefined : () => editTask(task)} accountMode={accountMode} />)}</div></section>)}</div></div>}
   </div>;
 }

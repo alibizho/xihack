@@ -5,17 +5,20 @@ export function TaskRow({
   task,
   toggle,
   edit,
+  accountMode = false,
 }: {
   task: Task;
   toggle: (id: string) => void;
   edit?: () => void;
+  accountMode?: boolean;
 }) {
   return (
     <div className={`task-row ${task.done ? "is-done" : ""}`}>
       <button
         className="task-check"
         onClick={() => toggle(task.id)}
-        aria-label={`${task.done ? "恢复待办" : "标记完成"}：${task.title}`}
+        disabled={accountMode && task.done}
+        aria-label={`${task.done ? accountMode ? "已完成" : "恢复待办" : "标记完成"}：${task.title}`}
         aria-pressed={task.done}
       >
         {task.done && <Icon name="check" size={15} />}
