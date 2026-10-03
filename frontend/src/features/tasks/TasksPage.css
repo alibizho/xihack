@@ -81,7 +81,7 @@
 .quadrant-body .task-body strong { font-size: 13px; }
 .quadrant-body .task-meta { font-size: 10px; }
 @media (max-width: 700px) {
-  .tasks-intro { padding: 8px 2px 13px; align-items: start; }
+  .tasks-intro { padding: 8px 2px 13px; align-items: center; }
   .tasks-intro .button { min-width: 48px; width: 48px; padding: 0; display: grid; place-items: center; }
   .tasks-intro .button span { display: none; }
   .tasks-intro .button svg { width: 20px; height: 20px; }
