@@ -27,3 +27,7 @@
 .profile-card > p { margin: 20px 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .profile-message { color: #a3434d; font-size: 13px; }
 @media (max-width: 700px) { .auth-card { padding: 22px; } .profile-intro { padding: 18px 2px 22px; } .profile-card { padding: 18px; } }
+.lang-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0; }
+.lang-toggle > span { font-size: 13px; color: #6b808b; }
+.lang-toggle button { min-height: 36px; padding: 6px 14px; margin-left: 8px; border: 1px solid #c9d7dc; border-radius: 10px; background: transparent; color: #2e4c5f; }
+.lang-toggle button.selected { border-color: #426b82; background: #d5edf0; font-weight: 700; }

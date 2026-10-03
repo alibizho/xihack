@@ -10,6 +10,7 @@ import { ProfilePage } from "./features/profile/ProfilePage";
 import { currentUser } from "./features/profile/authApi";
 import { guestCallsLeft, isGuest, spendGuestCall } from "./features/profile/guest";
 import { ApiRequestError } from "./shared/api.ts";
+import { getLang, setLang, t, type Lang } from "./shared/i18n.ts";
 import { csrf, listTasks, proposeComplete, proposeCreate, proposeUpdate, type Proposal, type ServerTask } from "./features/tasks/agentApi";
 import { displayTask, taskInput } from "./features/tasks/serverTasks";
 import { TaskProposalDialog } from "./features/tasks/TaskProposalDialog";
@@ -17,9 +18,9 @@ import { TaskReportDialog } from "./features/tasks/TaskReportDialog";
 
 type Page = "today" | "tasks" | "training" | "profile";
 type Draft = { edit?: Task };
+const navLabels: Record<Page, () => string> = { today: () => t("navToday"), tasks: () => t("navTasks"), training: () => t("navTraining"), profile: () => t("navMe") };
 export type Capture = { id: string; input: string; title: string; time: string; edited: boolean };
 const pages: Page[] = ["today", "tasks", "training", "profile"];
-const labels: Record<Page, string> = { today: "今天", tasks: "事务", training: "训练", profile: "我的" };
 const icons: Record<Page, IconName> = { today: "home", tasks: "list", training: "focus", profile: "user" };
 function pageFromHash(): Page {
   const value = location.hash.slice(1);
@@ -29,6 +30,13 @@ function pageFromHash(): Page {
 export function App() {
   const [username, setUsername] = useState<string | null | undefined>();
   const [connectionError, setConnectionError] = useState("");
+  const [lang, setLangState] = useState<Lang>(getLang());
+  function changeLang(next: Lang) {
+    setLang(next);
+    setLangState(next);
+    document.documentElement.lang = next === "en" ? "en" : "zh-CN";
+    document.title = t("appTitle");
+  }
 
   async function checkSession() {
     setUsername(undefined);
@@ -42,12 +50,12 @@ export function App() {
 
   useEffect(() => { void checkSession(); }, []);
 
-  if (username === undefined) return <div className="auth-page"><p role="status">正在检查登录状态…</p></div>;
+  if (username === undefined) return <div className="auth-page"><p role="status">{t("checkingSession")}</p></div>;
   if (username === null) return <AuthPage connectionError={connectionError} onRetry={checkSession} onAuthenticated={(name) => { setConnectionError(""); setUsername(name); }} />;
-  return <Workspace key={username} username={username} onLoggedOut={() => setUsername(null)} />;
+  return <Workspace key={username} username={username} lang={lang} onLangChange={changeLang} onLoggedOut={() => setUsername(null)} />;
 }
 
-function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: () => void }) {
+function Workspace({ username, lang, onLangChange, onLoggedOut }: { username: string; lang: Lang; onLangChange: (lang: Lang) => void; onLoggedOut: () => void }) {
   const historyStorageKey = `xihack-demo-history:${username}`;
   const [page, setPage] = useState<Page>(pageFromHash);
   const [focusDay, setFocusDay] = useState(localDate(new Date()));
@@ -78,7 +86,7 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
   });
 
   const visibleTasks = serverTasks.map(displayTask);
-  const openReport = (id: string) => setReportTask({ id, title: serverTasks.find((task) => task.task_id === id)?.title || "已完成事务" });
+  const openReport = (id: string) => setReportTask({ id, title: serverTasks.find((task) => task.task_id === id)?.title || t("completedTaskFallback") });
   async function refreshTasks() {
     try { setServerTasks(await listTasks()); setTaskError(""); setTaskViewKey((value) => value + 1); }
     catch (reason) { setTaskError((reason as Error).message); }
@@ -121,10 +129,10 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main">跳到主要内容</a>
+      <a className="skip-link" href="#main">{t("skipToMain")}</a>
       <div className="main-wrap">
         <header className="topbar">
-          <a className="app-brand" href="#today" onClick={() => setPage("today")} aria-label="易忆，返回首页">
+          <a className="app-brand" href="#today" onClick={() => setPage("today")} aria-label={t("homeAria")}>
             <img src="/logo.jpg" alt="" />
             <span>易忆</span>
           </a>
@@ -134,11 +142,11 @@ function Workspace({ username, onLoggedOut }: { username: string; onLoggedOut: (
           {page === "today" && <TodayPage tasks={visibleTasks} history={history} navigate={navigate} voiceOpen={voiceOpen} voiceText={voiceText} openVoice={openVoice} openTextChat={openTextChat} closeVoice={() => setVoiceOpen(false)} onSessionExpired={onLoggedOut} onTasksChanged={() => void refreshTasks()} onTaskCompleted={openReport} guestQuota={guest ? { left: guestLeft ?? 0, spend: spendCall } : undefined} />}
           {page === "tasks" && <TasksPage key={taskViewKey} serverMode tasks={visibleTasks} initialDay={focusDay} toggle={toggle} updateScore={updateScore} openComposer={(voice) => voice ? openVoice() : setDraft({})} editTask={(task) => setDraft({ edit: task })} openReport={(task) => openReport(task.id)} />}
           {page === "training" && <TrainingPage tasks={visibleTasks} navigate={() => navigate("tasks")} />}
-          {page === "profile" && <ProfilePage username={username} guestLeft={guestLeft} onLoggedOut={onLoggedOut} />}
+          {page === "profile" && <ProfilePage username={username} guestLeft={guestLeft} lang={lang} onLangChange={onLangChange} onLoggedOut={onLoggedOut} />}
         </main>
-        <nav className="bottom-nav" aria-label="主导航">
+        <nav className="bottom-nav" aria-label={t("mainNavAria")}>
           {pages.map((item) => <button key={item} className={page === item ? "active" : ""} onClick={() => navigate(item)} aria-current={page === item ? "page" : undefined}>
-            <Icon name={icons[item]} size={20} /><span>{labels[item]}</span>
+            <Icon name={icons[item]} size={20} /><span>{navLabels[item]()}</span>
           </button>)}
         </nav>
       </div>
