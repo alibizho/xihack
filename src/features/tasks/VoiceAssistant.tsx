@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
-import { calibrate as calibrateSpeech, cancelProposal, confirmProposal, createConversation, csrf, getRun, getRunProposals, sendMessage, type Proposal } from "./agentApi";
+import { calibrate as calibrateSpeech, cancelProposal, confirmProposal, createConversation, csrf, getRun, getRunProposals, sendMessage, withLocalContext, type Due, type Proposal } from "./agentApi";
 import "./TaskComposer.css";
 
 type Recognition = {
@@ -22,6 +22,12 @@ type RecognitionClass = {
 };
 type Message = { role: "user" | "assistant"; text: string };
 
+function dueLabel(due: Due | undefined) {
+  if (!due) return "未指定";
+  if (due.precision === "date") return `${due.date}（全天）`;
+  return new Intl.DateTimeFormat("zh-CN", { timeZone: due.timezone, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(due.at));
+}
+
 function localRecognition(): RecognitionClass | undefined {
   const browser = window as Window & { SpeechRecognition?: RecognitionClass; webkitSpeechRecognition?: RecognitionClass };
   const recognition = browser.SpeechRecognition || browser.webkitSpeechRecognition;
@@ -37,7 +43,7 @@ export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, on
   const sessionId = useRef(0);
   const conversationId = useRef("");
   const conversationRequestId = useRef(crypto.randomUUID());
-  const pendingMessage = useRef({ content: "", id: "", shown: false });
+  const pendingMessage = useRef({ content: "", payload: "", id: "", shown: false });
   const calibrationId = useRef(0);
   const calibrationTask = useRef<Promise<void>>(Promise.resolve());
   const inputRef = useRef("");
@@ -181,8 +187,8 @@ export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, on
         conversationId.current = conversation.conversation_id;
       }
       if (session !== sessionId.current) return;
-      if (pendingMessage.current.content !== content) pendingMessage.current = { content, id: crypto.randomUUID(), shown: false };
-      const { run_id } = await sendMessage(conversationId.current, content, pendingMessage.current.id, token);
+      if (pendingMessage.current.content !== content) pendingMessage.current = { content, payload: withLocalContext(content), id: crypto.randomUUID(), shown: false };
+      const { run_id } = await sendMessage(conversationId.current, pendingMessage.current.payload, pendingMessage.current.id, token);
       if (session !== sessionId.current) return;
       if (!pendingMessage.current.shown) {
         setMessages((current) => [...current, { role: "user", text: content }]);
@@ -199,12 +205,12 @@ export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, on
           setProposals((current) => [...current, ...found]);
         }
         if (run.status === "completed") {
-          pendingMessage.current = { content: "", id: "", shown: false };
+          pendingMessage.current = { content: "", payload: "", id: "", shown: false };
           setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || "助手没有返回文字" }]);
           return;
         }
         if (run.status === "failed" || run.status === "cancelled") {
-          pendingMessage.current = { content: "", id: "", shown: false };
+          pendingMessage.current = { content: "", payload: "", id: "", shown: false };
           throw new Error(`助手处理失败${run.error_code ? ` (${run.error_code})` : ""}`);
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -244,7 +250,21 @@ export function VoiceAssistant({ expanded, onOpen, onClose, onSessionExpired, on
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
     {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
-      {proposals.map((proposal) => <div className="voice-proposal" key={proposal.proposal_id}><strong>{proposal.operation === "create" ? "新建事务" : proposal.operation === "complete" ? "完成事务" : proposal.operation === "delete" ? "删除事务" : "修改事务"}</strong><p>{proposal.task?.title || proposal.changes?.title || proposal.task_id}</p>{proposal.status === "pending" ? <div><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>取消</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>确认写入</button></div> : <small>{proposal.status === "confirmed" ? "已确认" : "已取消"}</small>}</div>)}
+      {proposals.map((proposal, index) => {
+        const task = proposal.task || proposal.changes;
+        return <article className="voice-proposal" key={proposal.proposal_id}>
+          <strong>提案 {index + 1} · {proposal.operation === "create" ? "新建事务" : proposal.operation === "complete" ? "完成事务" : proposal.operation === "delete" ? "删除事务" : "修改事务"}</strong>
+          <p className="voice-proposal-title">{task?.title || proposal.task_id}</p>
+          {task?.description && <p className="voice-proposal-description">{task.description}</p>}
+          {task && <dl className="voice-proposal-details">
+            {(proposal.operation === "create" || task.due !== undefined) && <><dt>截止</dt><dd>{dueLabel(task.due)}</dd></>}
+            {(proposal.operation === "create" || task.category !== undefined) && <><dt>分类</dt><dd>{task.category || "未分类"}</dd></>}
+            {typeof task.important === "boolean" && <><dt>重要</dt><dd>{task.important ? "是" : "否"}</dd></>}
+            {typeof task.urgent === "boolean" && <><dt>紧急</dt><dd>{task.urgent ? "是" : "否"}</dd></>}
+          </dl>}
+          {proposal.status === "pending" ? <div className="voice-proposal-actions"><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>取消</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>确认写入</button></div> : <small>{proposal.status === "confirmed" ? "已确认" : "已取消"}</small>}
+        </article>;
+      })}
       <div ref={messageEnd} />
     </div>}
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>

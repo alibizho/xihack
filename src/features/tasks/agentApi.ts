@@ -36,6 +36,14 @@ export async function listTasks(): Promise<ServerTask[]> {
 
 export const calibrate = async (text: string, token: string) => post<SpeechDraft>("/transcriptions", { text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, token);
 export const createConversation = (token: string, requestId: string) => post<{ conversation_id: string }>("/conversations", { client_request_id: requestId, title: "语音对话" }, token);
+// ponytail: keep local time in the saved message until runs have separate context metadata.
+export function withLocalContext(text: string): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const localTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const context = `[应用提供的用户本地时间：${localTime}；时区：${Intl.DateTimeFormat().resolvedOptions().timeZone}]\n`;
+  return context.length + text.length <= 8000 ? context + text : text;
+}
 export const sendMessage = (conversationId: string, text: string, messageId: string, token: string) => post<{ run_id: string }>(`/conversations/${conversationId}/messages`, { client_message_id: messageId, content: text }, token);
 export const getRun = (runId: string) => api<Run>(`/runs/${runId}`);
 export const getRunProposals = (runId: string) => api<Proposal[]>(`/runs/${runId}/proposals`);

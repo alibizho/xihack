@@ -37,7 +37,7 @@ export function AuthPage({ onAuthenticated, connectionError, onRetry }: Props) {
     <main className="auth-card" aria-labelledby="auth-title">
       <span className="section-kicker">你的事务助理</span>
       <h1 id="auth-title">{mode === "login" ? "欢迎回来" : "创建账号"}</h1>
-      <p>登录后使用语音助理。事务列表目前仍是此浏览器的演示数据。</p>
+      <p>登录后说出要做的事，逐项确认提案后保存到账号。</p>
       {connectionError && <div className="auth-error" role="alert">{connectionError}<button type="button" onClick={onRetry}>重试连接</button></div>}
       <form onSubmit={submit}>
         <label htmlFor="auth-username">用户名</label>

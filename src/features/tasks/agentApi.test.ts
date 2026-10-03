@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { confirmProposal, getRunProposals, getTaskReport, listTasks, submitTaskReport } from "./agentApi.ts";
+import { confirmProposal, getRunProposals, getTaskReport, listTasks, sendMessage, submitTaskReport, withLocalContext } from "./agentApi.ts";
+
+test("narrated tasks carry the user's local date for relative deadlines", async () => {
+  const original = globalThis.fetch;
+  let body: { content: string } | undefined;
+  globalThis.fetch = async (_path, init) => {
+    body = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({ run_id: "run-1" }), { status: 202 });
+  };
+  try {
+    const payload = withLocalContext("明天得交作业");
+    await sendMessage("conversation-1", payload, "message-1", "csrf-token");
+    assert.match(body?.content || "", /^\[应用提供的用户本地时间：\d{4}-\d{2}-\d{2} \d{2}:\d{2}；时区：.+\]\n明天得交作业$/);
+    assert.equal(body?.content, payload);
+  } finally { globalThis.fetch = original; }
+});
 
 test("account tasks paginate and Agent proposals require explicit confirmation", async () => {
   const original = globalThis.fetch;
