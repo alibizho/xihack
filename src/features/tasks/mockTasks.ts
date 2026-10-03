@@ -1,3 +1,5 @@
+import { getLang, t } from "../../shared/i18n.ts";
+
 export type Task = {
   id: string;
   title: string;
@@ -12,7 +14,7 @@ export type Task = {
 export type TaskDraft = Omit<Task, "id" | "done">;
 
 export const localDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-export const scheduledDue = (date: string, time: string) => date ? `${date}${time ? ` ${time}` : ""}` : "待安排";
+export const scheduledDue = (date: string, time: string) => date ? `${date}${time ? ` ${time}` : ""}` : t("dueUnscheduled");
 export function parseDue(due: string, now = new Date()): { date: string; time: string } {
   const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const exact = due.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
@@ -37,11 +39,13 @@ export function parseDue(due: string, now = new Date()): { date: string; time: s
 }
 export function formatDue(due: string, now = new Date()): string {
   const { date, time } = parseDue(due, now);
-  if (!date) return due || "待安排";
+  if (!date) return due || t("dueUnscheduled");
   const today = localDate(now);
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const day = new Date(`${date}T00:00:00`);
-  const label = date === today ? "今天" : date === localDate(tomorrow) ? "明天" : `${day.getMonth() + 1}月${day.getDate()}日`;
+  // ponytail: relative date words follow the UI language; parsing still accepts Chinese expressions only (en users get picker/absolute dates).
+  const zh = getLang() === "zh";
+  const label = date === today ? (zh ? "今天" : "Today") : date === localDate(tomorrow) ? (zh ? "明天" : "Tomorrow") : zh ? `${day.getMonth() + 1}月${day.getDate()}日` : `${day.getMonth() + 1}/${day.getDate()}`;
   return `${label}${time ? ` ${time}` : ""}`;
 }
 export const compareByTime = (a: Pick<Task, "due" | "importance" | "urgency">, b: Pick<Task, "due" | "importance" | "urgency">) =>

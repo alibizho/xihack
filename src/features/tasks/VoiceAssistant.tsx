@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
 import { calibrate as calibrateSpeech, cancelProposal, confirmProposal, createConversation, csrf, getRun, getRunProposals, sendMessage, withLocalContext, type Due, type Proposal } from "./agentApi";
+import { fill, speechLang, t, uiLocale } from "../../shared/i18n.ts";
 import "./TaskComposer.css";
 
 type Recognition = {
@@ -21,12 +22,12 @@ type RecognitionClass = {
 type Message = { role: "user" | "assistant"; text: string };
 
 function dueParts(due: Due | undefined) {
-  if (!due) return { date: "未指定", time: "未指定" };
-  if (due.precision === "date") return { date: due.date, time: "全天" };
+  if (!due) return { date: t("dateUnset"), time: t("dateUnset") };
+  if (due.precision === "date") return { date: due.date, time: t("allDay") };
   const when = new Date(due.at);
   return {
-    date: new Intl.DateTimeFormat("zh-CN", { timeZone: due.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(when),
-    time: new Intl.DateTimeFormat("zh-CN", { timeZone: due.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(when),
+    date: new Intl.DateTimeFormat(uiLocale(), { timeZone: due.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(when),
+    time: new Intl.DateTimeFormat(uiLocale(), { timeZone: due.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(when),
   };
 }
 
@@ -107,7 +108,7 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
       const draft = await calibrateSpeech(text, await csrf());
       if (active.current && requestId === calibrationId.current) {
         if (inputRef.current === text) { inputRef.current = draft.draft_text; setInput(draft.draft_text); }
-        setClarification(draft.needs_clarification ? draft.clarification || "请检查识别结果" : "");
+        setClarification(draft.needs_clarification ? draft.clarification || t("checkTranscript") : "");
       }
     } catch (reason) {
       if (!active.current || requestId !== calibrationId.current) return;
@@ -136,14 +137,14 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
   function record(session = sessionId.current) {
     if (recognition.current) return;
     const SpeechRecognition = speechRecognition();
-    if (!SpeechRecognition) { setError("此浏览器不支持语音识别，请改用文字输入"); return; }
+    if (!SpeechRecognition) { setError(t("errNoSpeechApi")); return; }
     setPreparing(true);
     setError("");
     let started = false;
     try {
       if (!active.current || session !== sessionId.current) return;
       const next = new SpeechRecognition();
-      next.lang = "zh-CN";
+      next.lang = speechLang(); // ponytail: follows the UI language; add a separate selector if mixed-language input matters
       next.continuous = true;
       next.interimResults = true;
       recognitionBase.current = inputRef.current.trim() ? `${inputRef.current.trim()} ` : "";
@@ -176,7 +177,7 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
         if (event.error === "aborted" && !keepListening.current) return;
         keepListening.current = false;
         sendOnEnd.current = false;
-        setError(event.error === "not-allowed" ? "请允许麦克风权限，或改用文字输入" : event.error === "no-speech" ? "没听到声音，请点按麦克风重试" : event.error === "network" ? "语音服务暂时无法连接，请重试或改用文字输入" : "识别失败，请重试或改用文字输入");
+        setError(event.error === "not-allowed" ? t("errMicDenied") : event.error === "no-speech" ? t("errNoSpeech") : event.error === "network" ? t("errSpeechNetwork") : t("errRecogFailed"));
       };
       next.onend = () => {
         if (!active.current || session !== sessionId.current) return;
@@ -194,16 +195,16 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
     } catch (reason) {
       recognition.current = null;
       keepListening.current = false;
-      if (active.current && session === sessionId.current) setError((reason as Error).message || "无法开始录音，请改用文字输入");
+      if (active.current && session === sessionId.current) setError((reason as Error).message || t("errRecordFailed"));
     } finally { if (!started && active.current && session === sessionId.current) setPreparing(false); }
   }
 
   async function send() {
     const session = sessionId.current;
     const content = inputRef.current.trim();
-    if (!content) { setError("请先说出或输入内容"); return; }
-    if (content.length > 8000) { setError("内容不能超过 8000 字"); return; }
-    if (guestQuota && guestQuota.left <= 0) { setError("游客 AI 次数已用完。在“我的”退出后注册正式账号即可继续使用。"); return; }
+    if (!content) { setError(t("errEmptyInput")); return; }
+    if (content.length > 8000) { setError(t("errTooLong")); return; }
+    if (guestQuota && guestQuota.left <= 0) { setError(t("errGuestQuota")); return; }
     setBusy(true);
     setError("");
     calibrationId.current++;
@@ -235,16 +236,16 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
         }
         if (run.status === "completed") {
           pendingMessage.current = { content: "", payload: "", id: "", shown: false };
-          setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || "助手没有返回文字" }]);
+          setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || t("errNoReply") }]);
           return;
         }
         if (run.status === "failed" || run.status === "cancelled") {
           pendingMessage.current = { content: "", payload: "", id: "", shown: false };
-          throw new Error(`助手处理失败${run.error_code ? ` (${run.error_code})` : ""}`);
+          throw new Error(`${t("errRunFailed")}${run.error_code ? ` (${run.error_code})` : ""}`);
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
-      if (active.current && session === sessionId.current) throw new Error("等待回复超时，请稍后重试");
+      if (active.current && session === sessionId.current) throw new Error(t("errTimeout"));
     } catch (reason) {
       if (active.current && session === sessionId.current) {
         if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
@@ -271,10 +272,10 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
   }
 
   return <div className={`voice-capture ${expanded ? "is-open" : ""}`}>
-    {expanded && <button className="voice-close" type="button" onClick={close} aria-label="收起语音助理"><Icon name="close" size={18} /></button>}
-    <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening || keepListening.current ? "结束录音并发送" : "再次开始录音" : "打开语音助理并开始聆听"}>
+    {expanded && <button className="voice-close" type="button" onClick={close} aria-label={t("collapseAria")}><Icon name="close" size={18} /></button>}
+    <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening || keepListening.current ? t("stopSendAria") : t("recordAgainAria") : t("micAsk")}>
       <span className={`voice-orb ${expanded ? "voice-orb-active" : ""} ${preparing || listening ? "voice-orb-listening" : ""}`}><Icon name="mic" size={31} /></span>
-      <strong id="capture-title">{expanded ? preparing ? "正在开启麦克风…" : listening || keepListening.current ? "正在聆听 · 点按结束" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
+      <strong id="capture-title">{expanded ? preparing ? t("micOpening") : listening || keepListening.current ? t("micListening") : t("micTapMore") : t("micAsk")}</strong>
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
     {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
@@ -283,30 +284,30 @@ export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onCl
         const task = proposal.task || proposal.changes;
         const due = dueParts(task?.due);
         return <article className="voice-proposal" key={proposal.proposal_id}>
-          <strong>提案 {index + 1} · {proposal.operation === "create" ? "新建事务" : proposal.operation === "complete" ? "完成事务" : proposal.operation === "delete" ? "删除事务" : "修改事务"}</strong>
+          <strong>{t("proposalLabel")} {index + 1} · {proposal.operation === "create" ? t("opCreate") : proposal.operation === "complete" ? t("opComplete") : proposal.operation === "delete" ? t("opDelete") : t("opUpdate")}</strong>
           <p className="voice-proposal-title">{task?.title || proposal.task_id}</p>
           {task?.description && <p className="voice-proposal-description">{task.description}</p>}
           {task && <dl className="voice-proposal-details">
-            {(proposal.operation === "create" || task.due !== undefined) && <><dt>日期</dt><dd>{due.date}</dd><dt>时间</dt><dd>{due.time}</dd></>}
-            {(proposal.operation === "create" || task.category !== undefined) && <><dt>分类</dt><dd>{task.category || "未分类"}</dd></>}
-            {typeof task.importance === "number" && <><dt>重要度</dt><dd>{task.importance.toFixed(1)} / 10</dd></>}
-            {typeof task.urgency === "number" && <><dt>紧急度</dt><dd>{task.urgency.toFixed(1)} / 10</dd></>}
+            {(proposal.operation === "create" || task.due !== undefined) && <><dt>{t("dateLabel")}</dt><dd>{due.date}</dd><dt>{t("timeLabel")}</dt><dd>{due.time}</dd></>}
+            {(proposal.operation === "create" || task.category !== undefined) && <><dt>{t("categoryLabel")}</dt><dd>{task.category || t("uncategorized")}</dd></>}
+            {typeof task.importance === "number" && <><dt>{t("importanceLabel")}</dt><dd>{task.importance.toFixed(1)} / 10</dd></>}
+            {typeof task.urgency === "number" && <><dt>{t("urgencyLabel")}</dt><dd>{task.urgency.toFixed(1)} / 10</dd></>}
           </dl>}
-          {proposal.status === "pending" ? <div className="voice-proposal-actions"><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>取消</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>确认写入</button></div> : <small>{proposal.status === "confirmed" ? "已确认" : "已取消"}</small>}
+          {proposal.status === "pending" ? <div className="voice-proposal-actions"><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>{t("cancel")}</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>{t("confirmWrite")}</button></div> : <small>{proposal.status === "confirmed" ? t("confirmedLabel") : t("cancelledLabel")}</small>}
         </article>;
       })}
       <div ref={messageEnd} />
     </div>}
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-    <label className="field-label" htmlFor="voice-input">对话内容（可修改）</label>
-    <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { calibrationId.current++; setCalibrating(false); inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder="说出或输入你想问的事" />
+    <label className="field-label" htmlFor="voice-input">{t("chatLabel")}</label>
+    <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { calibrationId.current++; setCalibrating(false); inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder={t("chatPlaceholder")} />
     {clarification && <p className="voice-chat-note" role="status">{clarification}</p>}
     {error && <p className="field-error" role="alert">{error}</p>}
-    <button className="button button-primary full-width" type="submit" disabled={busy || listening || preparing || calibrating || !input.trim()}>{busy ? "正在处理…" : "发送给助理"}</button>
+    <button className="button button-primary full-width" type="submit" disabled={busy || listening || preparing || calibrating || !input.trim()}>{busy ? t("processing") : t("sendAria")}</button>
     </form>
     {guestQuota
-      ? <p className="composer-footnote">游客模式 · AI 助理剩余 {guestQuota.left} 次；手动添加事务不受限制。</p>
-      : <p className="composer-footnote">事务变更仍需逐项确认。也可以问「我该先做哪件事？」</p>}
+      ? <p className="composer-footnote">{fill("guestVoiceNote", { n: guestQuota.left })}</p>
+      : <p className="composer-footnote">{t("confirmNote")}</p>}
     </div></div>
   </div>;
 }
