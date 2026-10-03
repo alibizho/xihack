@@ -7,7 +7,7 @@
     "build": "tsc -b && vite build --configLoader runner",
     "preview": "vite preview",
     "start": "node --env-file-if-exists=.env.local --experimental-strip-types server/index.ts",
-    "test": "node --experimental-strip-types --test src/features/tasks/mockTasks.test.ts src/features/tasks/agentApi.test.ts src/shared/api.test.ts src/features/profile/authApi.test.ts src/features/training/trainingGame.test.ts server/trainingFeedback.test.ts"
+    "test": "node --experimental-strip-types --test src/features/tasks/mockTasks.test.ts src/features/tasks/agentApi.test.ts src/shared/api.test.ts src/shared/i18n.test.ts src/features/profile/authApi.test.ts src/features/profile/guest.test.ts src/features/training/trainingGame.test.ts server/trainingFeedback.test.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.0",

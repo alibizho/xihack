@@ -1,4 +1,5 @@
 import type { Difficulty } from "./trainingGame";
+import { uiLocale } from "../../shared/i18n.ts";
 
 export type TrainingFeedback = { observation: string; suggestion: string };
 export type FeedbackRound = { difficulty: Difficulty; seconds: number; mistakes: number; taps: number[] };
@@ -7,7 +8,7 @@ export async function requestTrainingFeedback(round: FeedbackRound): Promise<Tra
   const response = await fetch("/api/training-feedback", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ difficulty: round.difficulty, seconds: round.seconds, mistakes: round.mistakes, taps: round.taps }),
+    body: JSON.stringify({ difficulty: round.difficulty, seconds: round.seconds, mistakes: round.mistakes, taps: round.taps, language: uiLocale() === "en-US" ? "en" : "zh" }),
     signal: AbortSignal.timeout(65_000),
   });
   const data: unknown = await response.json();

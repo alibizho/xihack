@@ -4,30 +4,31 @@ import { cellFeedback, shuffledBoard, type Difficulty } from "./trainingGame";
 import { requestTrainingFeedback, type TrainingFeedback } from "./trainingFeedback";
 import { getRoundInsight } from "./trainingInsight";
 import { Icon } from "../../shared/Icon";
+import { fill, t, uiLocale } from "../../shared/i18n.ts";
 import "./TrainingPage.css";
 
 type Round = { id: string; difficulty: Difficulty; seconds: number; mistakes: number; taps: number[]; completedAt: string; feedback?: TrainingFeedback };
-const modes: { id: Difficulty; name: string; detail: string }[] = [
-  { id: "beginner", name: "入门", detail: "提示下一个数字，点过的格子变色" },
-  { id: "normal", name: "普通", detail: "没有数字提示，点过的格子变色" },
-  { id: "advanced", name: "进阶", detail: "没有提示，点过的格子保持原样" },
+const modes: { id: Difficulty; name: () => string; detail: () => string }[] = [
+  { id: "beginner", name: () => t("modeBeginner"), detail: () => t("modeBeginnerDetail") },
+  { id: "normal", name: () => t("modeNormal"), detail: () => t("modeNormalDetail") },
+  { id: "advanced", name: () => t("modeAdvanced"), detail: () => t("modeAdvancedDetail") },
 ];
-const formatTime = (seconds: number) => seconds.toFixed(1) + " 秒";
+const formatTime = (seconds: number) => seconds.toFixed(1) + t("secondShort");
 const pendingReviews = new Set<string>();
 const roundsStorageKey = "xihack-demo-rounds";
 const roundsUpdatedEvent = "xihack-rounds-updated";
 const formatDate = (value: string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "历史对局" : new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+  return Number.isNaN(date.getTime()) ? t("trainingHistory") : new Intl.DateTimeFormat(uiLocale(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
 };
 
 function RoundFeedback({ round }: { round: Round & { feedback: TrainingFeedback } }) {
-  const insight = getRoundInsight(round);
+  const insight = getRoundInsight(round, uiLocale() === "en-US" ? "en" : "zh");
   return <div className="round-feedback-content">
     <strong className="round-feedback-heading">{insight.heading}</strong>
     <p className="round-feedback-evidence">{insight.evidence}</p>
     <p className="round-feedback-observation">{round.feedback.observation}</p>
-    <div className="round-feedback-action"><span>下局只试一件事</span><p>{round.feedback.suggestion}</p></div>
+    <div className="round-feedback-action"><span>{t("reviewAction")}</span><p>{round.feedback.suggestion}</p></div>
   </div>;
 }
 
@@ -128,7 +129,7 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
       setRounds((current) => current.map((item) => item.id === round.id ? { ...item, feedback } : item));
       setFeedbackState((current) => current?.roundId === round.id ? null : current);
     } catch (error) {
-      const message = error instanceof Error && error.name !== "TimeoutError" ? error.message : "AI 响应超时，请稍后重试";
+      const message = error instanceof Error && error.name !== "TimeoutError" ? error.message : t("reviewTimeout");
       setFeedbackState((current) => current?.roundId === round.id ? { roundId: round.id, status: "error", message } : current);
     } finally {
       pendingReviews.delete(round.id);
@@ -155,40 +156,40 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
   const slowest = intervals.length ? intervals.indexOf(Math.max(...intervals)) + 1 : 0;
 
   return <div className="training-page">
-    <header className="training-intro"><span className="section-kicker">专注训练 / 5 × 5</span><h1>从 1 数到 25</h1><p>选一个难度，按顺序点击数字。</p></header>
-    <div className="difficulty-picker" role="group" aria-label="训练难度">{modes.map((mode) => <button key={mode.id} className={difficulty === mode.id ? "selected" : ""} aria-pressed={difficulty === mode.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setDifficulty(mode.id)}><strong>{mode.name}</strong><span>{mode.detail}</span></button>)}</div>
-    <section className="training-surface" aria-label="5×5 数字训练">
-      <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? `下一个：${target}` : phase === "playing" ? `已完成 ${target - 1} / 25` : modes.find((mode) => mode.id === difficulty)?.name}</span><strong>{formatTime(elapsed)}</strong></div>
+    <header className="training-intro"><span className="section-kicker">{t("trainingKicker")}</span><h1>{t("countFrom1to25")}</h1><p>{t("pickDifficulty")}</p></header>
+    <div className="difficulty-picker" role="group" aria-label={t("difficultyAria")}>{modes.map((mode) => <button key={mode.id} className={difficulty === mode.id ? "selected" : ""} aria-pressed={difficulty === mode.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setDifficulty(mode.id)}><strong>{mode.name()}</strong><span>{mode.detail()}</span></button>)}</div>
+    <section className="training-surface" aria-label={t("boardAria")}>
+      <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? fill("nextNumber", { n: target }) : phase === "playing" ? fill("doneCount", { n: target - 1 }) : modes.find((mode) => mode.id === difficulty)?.name()}</span><strong>{formatTime(elapsed)}</strong></div>
       {phase !== "idle" && <div className="board-wrap" ref={boardWrap}>
-        <div className={`training-board ${phase === "countdown" ? "is-hidden" : ""}`}>{board.map((number) => <button key={number} className={`training-cell ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} onClick={() => tap(number)} disabled={phase !== "playing"} aria-label={`数字 ${number}`}>{number}</button>)}</div>
+        <div className={`training-board ${phase === "countdown" ? "is-hidden" : ""}`}>{board.map((number) => <button key={number} className={`training-cell ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} onClick={() => tap(number)} disabled={phase !== "playing"} aria-label={fill("numberAria", { n: number })}>{number}</button>)}</div>
         {phase === "countdown" && <div className="board-overlay" aria-live="polite">{countdown}</div>}
       </div>}
-      {phase === "playing" && <p className="training-progress">误触 {mistakes} 次 · 只有点对当前数字才会前进</p>}
-      {(phase === "idle" || phase === "interrupted" || phase === "finished") && <button className="button button-primary training-start" onClick={start}><Icon name="play" size={18} /> {phase === "idle" ? "开始训练" : "再来一局"}</button>}
-      {phase === "interrupted" && <p className="training-message">页面切到后台，本局已中断，不计入成绩。</p>}
+      {phase === "playing" && <p className="training-progress">{fill("mistakesNote", { n: mistakes })}</p>}
+      {(phase === "idle" || phase === "interrupted" || phase === "finished") && <button className="button button-primary training-start" onClick={start}><Icon name="play" size={18} /> {phase === "idle" ? t("startTraining") : t("playAgain")}</button>}
+      {phase === "interrupted" && <p className="training-message">{t("interruptedNote")}</p>}
     </section>
     {phase === "finished" && last && <section className="training-result" ref={resultWrap} aria-live="polite">
-      <span className="section-kicker">本局结果 · {modes.find((mode) => mode.id === last.difficulty)?.name}</span>
+      <span className="section-kicker">{t("roundResult")} · {modes.find((mode) => mode.id === last.difficulty)?.name()}</span>
       <h2>{formatTime(last.seconds)}</h2>
-      <p>误触 {last.mistakes} 次 · 最慢的一步：{slowest === 1 ? "寻找 1" : `${slowest - 1} → ${slowest}`}</p>
+      <p>{fill("mistakesSlowest", { n: last.mistakes, step: slowest === 1 ? t("findingFirst") : fill("nextStepAria", { a: slowest - 1, b: slowest }) })}</p>
       <div className="training-feedback">
-        <div className="training-feedback-title"><h3>这一局，哪里值得留意</h3><span>MiMo 复盘</span></div>
+        <div className="training-feedback-title"><h3>{t("reviewFocus")}</h3><span>{t("reviewProvider")}</span></div>
         {last.feedback ? <RoundFeedback round={{ ...last, feedback: last.feedback }} />
-          : feedbackState?.roundId === last.id && feedbackState.status === "loading" ? <p role="status">正在根据本局记录生成复盘…可以先浏览其他页面，成绩会保留。</p>
-          : <div className="training-feedback-error"><p>{feedbackState?.roundId === last.id ? feedbackState.message : "本局复盘尚未生成"}</p><button type="button" onClick={() => void analyze(last)}>重试生成</button></div>}
-        <small>依据本局 25 次点击生成练习建议，不代表注意力测评。仅发送汇总指标，不上传任务或音视频。</small>
+          : feedbackState?.roundId === last.id && feedbackState.status === "loading" ? <p role="status">{t("reviewLoading")}</p>
+          : <div className="training-feedback-error"><p>{feedbackState?.roundId === last.id ? feedbackState.message : t("reviewMissing")}</p><button type="button" onClick={() => void analyze(last)}>{t("reviewRetry")}</button></div>}
+        <small>{t("reviewPrivacy")}</small>
       </div>
-      {nextTask && <button onClick={navigate}>接下来：{nextTask.title} <Icon name="arrow" size={17} /></button>}
+      {nextTask && <button onClick={navigate}>{t("nextUpLabel")}{nextTask.title} <Icon name="arrow" size={17} /></button>}
     </section>}
     {rounds.length > 0 && <section className="round-history" aria-label="训练记录">
-      <div className="round-history-heading"><h2>训练记录</h2><span>{rounds.length} 局 · {rounds.filter((round) => round.feedback).length} 份复盘</span></div>
+      <div className="round-history-heading"><h2>{t("trainingHistory")}</h2><span>{fill("reviewsCount", { rounds: rounds.length, reviews: rounds.filter((round) => round.feedback).length })}</span></div>
       <ol>{rounds.map((round) => <li key={round.id}>
         {round.feedback ? <details className="round-history-item">
-          <summary><span className="round-history-date">{formatDate(round.completedAt)}</span><span className="round-history-mode">{modes.find((mode) => mode.id === round.difficulty)?.name}</span><strong>{formatTime(round.seconds)}</strong><span className="round-history-review">查看复盘</span><Icon name="chevronDown" size={18} /></summary>
-          <div className="round-history-detail"><p className="round-history-mistakes">误触 {round.mistakes} 次</p><RoundFeedback round={{ ...round, feedback: round.feedback }} /></div>
+          <summary><span className="round-history-date">{formatDate(round.completedAt)}</span><span className="round-history-mode">{modes.find((mode) => mode.id === round.difficulty)?.name()}</span><strong>{formatTime(round.seconds)}</strong><span className="round-history-review">{t("reviewSee")}</span><Icon name="chevronDown" size={18} /></summary>
+          <div className="round-history-detail"><p className="round-history-mistakes">{fill("mistakesCount", { n: round.mistakes })}</p><RoundFeedback round={{ ...round, feedback: round.feedback }} /></div>
         </details> : <div className="round-history-item round-history-plain">
-          <div className="round-history-summary"><span className="round-history-date">{formatDate(round.completedAt)}</span><span className="round-history-mode">{modes.find((mode) => mode.id === round.difficulty)?.name}</span><strong>{formatTime(round.seconds)}</strong><span className="round-history-mistakes">误触 {round.mistakes} 次</span></div>
-          <button type="button" disabled={feedbackState?.status === "loading" || pendingReviews.has(round.id)} onClick={() => void analyze(round)}>{pendingReviews.has(round.id) ? "生成中…" : "生成复盘"}</button>
+          <div className="round-history-summary"><span className="round-history-date">{formatDate(round.completedAt)}</span><span className="round-history-mode">{modes.find((mode) => mode.id === round.difficulty)?.name()}</span><strong>{formatTime(round.seconds)}</strong><span className="round-history-mistakes">{fill("mistakesCount", { n: round.mistakes })}</span></div>
+          <button type="button" disabled={feedbackState?.status === "loading" || pendingReviews.has(round.id)} onClick={() => void analyze(round)}>{pendingReviews.has(round.id) ? t("generating") : t("reviewGenerate")}</button>
           {feedbackState?.roundId === round.id && feedbackState.status === "error" && <p role="status" className="round-history-error">{feedbackState.message}</p>}
         </div>}
       </li>)}</ol>

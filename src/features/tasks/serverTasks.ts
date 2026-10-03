@@ -1,10 +1,11 @@
 import { parseDue, type Task, type TaskDraft } from "./mockTasks.ts";
 import type { Due, ServerTask } from "./agentApi.ts";
+import { t, uiLocale } from "../../shared/i18n.ts";
 
 export function displayDue(due: Due): string {
-  if (!due) return "待安排";
+  if (!due) return t("dueUnscheduled");
   if (due.precision === "date") return due.date;
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = new Intl.DateTimeFormat(uiLocale(), {
     timeZone: due.timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   }).formatToParts(new Date(due.at));
   const value = (name: string) => parts.find((part) => part.type === name)?.value || "";
@@ -13,9 +14,9 @@ export function displayDue(due: Due): string {
 
 export function displayTask(task: ServerTask): Task {
   return {
-    id: task.task_id, title: task.title, due: displayDue(task.due), category: task.category || "未分类",
+    id: task.task_id, title: task.title, due: displayDue(task.due), category: task.category || t("uncategorized"),
     importance: task.importance, urgency: task.urgency,
-    importanceReason: "已保存的重要度", urgencyReason: "已保存的紧急度",
+    importanceReason: t("savedImportance"), urgencyReason: t("savedUrgency"),
     done: task.status === "completed",
   };
 }

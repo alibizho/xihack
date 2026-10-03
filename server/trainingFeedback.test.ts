@@ -20,11 +20,16 @@ test("training feedback validates a round, calls MiMo with derived metrics, and 
       assert.equal(requestBody.model, "mimo-v2.6-flash");
       assert.equal(requestBody.thinking.type, "disabled");
       assert.equal(requestBody.messages[1].content.includes("taps"), false);
+      if (requestBody.messages[1].content.includes('"language":"en"')) {
+        assert.match(requestBody.messages[0].content, /英文/);
+      }
       return Response.json({ choices: [{ message: { content: JSON.stringify({ observation: "本局点击节奏平稳，误触 2 次。", suggestion: "下次试试保持准确点击。" }) } }] });
     };
     const success = await realFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(round) });
     assert.equal(success.status, 200);
     assert.deepEqual(await success.json(), { observation: "本局点击节奏平稳，误触 2 次。", suggestion: "下次试试保持准确点击。" });
+    const english = await realFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...round, language: "en" }) });
+    assert.equal(english.status, 200);
     const invalid = await realFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...round, taps: [1, 2] }) });
     assert.equal(invalid.status, 400);
   } finally {

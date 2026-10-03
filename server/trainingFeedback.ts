@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { trainingReviewRequest } from "./trainingReviewAgent.ts";
 
 type Env = { MIMO_API_KEY?: string; MIMO_BASE_URL?: string };
-type RoundInput = { difficulty: "beginner" | "normal" | "advanced"; seconds: number; mistakes: number; taps: number[] };
+type RoundInput = { difficulty: "beginner" | "normal" | "advanced"; seconds: number; mistakes: number; taps: number[]; language?: "zh" | "en" };
 type Feedback = { observation: string; suggestion: string };
 
 const MAX_BODY_BYTES = 4096;
@@ -46,6 +46,7 @@ function validRound(value: unknown): value is RoundInput {
   if (!value || typeof value !== "object") return false;
   const round = value as Partial<RoundInput>;
   if (!["beginner", "normal", "advanced"].includes(round.difficulty || "")) return false;
+  if (round.language !== undefined && round.language !== "zh" && round.language !== "en") return false;
   if (typeof round.seconds !== "number" || !Number.isFinite(round.seconds) || round.seconds <= 0 || round.seconds > 1200) return false;
   if (!Number.isInteger(round.mistakes) || (round.mistakes as number) < 0 || (round.mistakes as number) > 500) return false;
   if (!Array.isArray(round.taps) || round.taps.length !== 25) return false;
@@ -86,7 +87,7 @@ export async function handleTrainingFeedback(request: IncomingMessage, response:
   } catch { reply(response, 503, { error: "AI 服务地址配置有误" }); return; }
 
   try {
-    const body = JSON.stringify(trainingReviewRequest(input));
+    const body = JSON.stringify(trainingReviewRequest(input, input.language || "zh"));
     const signal = AbortSignal.timeout(60_000);
     let upstream: Response | undefined;
     for (let attempt = 0; attempt < 2; attempt++) {

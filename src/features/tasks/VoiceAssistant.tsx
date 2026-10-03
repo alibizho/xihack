@@ -1,24 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../shared/Icon";
 import { ApiRequestError } from "../../shared/api.ts";
+import { fill, t, uiLocale } from "../../shared/i18n.ts";
 import { calibrate, cancelProposal, confirmProposal, createConversation, csrf, enhanceTranscription, getRun, getRunProposals, sendMessage, withLocalContext, type Due, type Proposal } from "./agentApi";
 import { startAudioCapture, type AudioCapture, type CapturedAudio } from "./audioCapture";
 import { browserAsrIsReady, prepareBrowserAsr, transcribeBrowser } from "./speech/browserAsr";
 import "./TaskComposer.css";
 
 type Message = { role: "user" | "assistant"; text: string };
+export type GuestQuota = { left: number; spend: () => boolean };
 
 function dueParts(due: Due | undefined) {
-  if (!due) return { date: "未指定", time: "未指定" };
-  if (due.precision === "date") return { date: due.date, time: "全天" };
+  if (!due) return { date: t("dateUnset"), time: t("dateUnset") };
+  if (due.precision === "date") return { date: due.date, time: t("allDay") };
   const when = new Date(due.at);
   return {
-    date: new Intl.DateTimeFormat("zh-CN", { timeZone: due.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(when),
-    time: new Intl.DateTimeFormat("zh-CN", { timeZone: due.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(when),
+    date: new Intl.DateTimeFormat(uiLocale(), { timeZone: due.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(when),
+    time: new Intl.DateTimeFormat(uiLocale(), { timeZone: due.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(when),
   };
 }
 
-export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
+export function VoiceAssistant({ expanded, initialText, guestQuota, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; guestQuota?: GuestQuota; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
   const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const capture = useRef<AudioCapture | null>(null);
@@ -54,6 +56,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
     if (initialText) {
       inputRef.current = initialText;
       setInput(initialText);
+      void send();
     } else if (!fromButton) void record(session);
     const stop = () => { if (document.hidden) { clearRecordingTimer(); const current = capture.current; capture.current = null; if (current) void current.cancel(); setListening(false); } };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
@@ -107,7 +110,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       setListening(true);
       recordingTimer.current = window.setTimeout(() => void finishRecording(session), 18_000);
     } catch (reason) {
-      if (active.current && session === sessionId.current) setError((reason as Error).message || "无法开始录音，请改用文字输入");
+      if (active.current && session === sessionId.current) setError((reason as Error).message || t("errRecordFailed"));
     } finally { if (active.current && session === sessionId.current) setPreparing(false); }
   }
 
@@ -140,11 +143,11 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       const text = `${prefix} ${draft.draft_text}`.trim();
       inputRef.current = text;
       setInput(text);
-      setClarification(draft.needs_clarification ? draft.clarification || "请检查识别结果" : "");
+      setClarification(draft.needs_clarification ? draft.clarification || t("checkTranscript") : "");
     } catch (reason) {
       if (!active.current || session !== sessionId.current) return;
       if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
-      else setError((reason as Error).message || "转写失败，请重试或使用文字输入");
+      else setError((reason as Error).message || t("errRecogFailed"));
     } finally { if (active.current && session === sessionId.current) setPreparing(false); }
   }
 
@@ -166,19 +169,20 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       const text = `${saved.prefix} ${draft.draft_text}`.trim();
       inputRef.current = text;
       setInput(text);
-      setClarification(draft.needs_clarification ? draft.clarification || "请检查识别结果" : "");
+      setClarification(draft.needs_clarification ? draft.clarification || t("checkTranscript") : "");
     } catch (reason) {
       if (!active.current || session !== sessionId.current) return;
       if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
-      else setError((reason as Error).message || "增强识别失败，请重试");
+      else setError((reason as Error).message || t("errRecogFailed"));
     } finally { if (active.current && session === sessionId.current) setPreparing(false); }
   }
 
   async function send() {
     const session = sessionId.current;
     const content = inputRef.current.trim();
-    if (!content) { setError("请先说出或输入内容"); return; }
-    if (content.length > 8000) { setError("内容不能超过 8000 字"); return; }
+    if (!content) { setError(t("errEmptyInput")); return; }
+    if (content.length > 8000) { setError(t("errTooLong")); return; }
+    if (guestQuota && guestQuota.left <= 0) { setError(t("errGuestQuota")); return; }
     setBusy(true);
     setError("");
     try {
@@ -192,6 +196,7 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
       if (pendingMessage.current.content !== content) pendingMessage.current = { content, payload: withLocalContext(content), id: crypto.randomUUID(), shown: false };
       const { run_id } = await sendMessage(conversationId.current, pendingMessage.current.payload, pendingMessage.current.id, token);
       if (session !== sessionId.current) return;
+      if (guestQuota) guestQuota.spend();
       if (!pendingMessage.current.shown) {
         setMessages((current) => [...current, { role: "user", text: content }]);
         pendingMessage.current.shown = true;
@@ -209,16 +214,16 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
         }
         if (run.status === "completed") {
           pendingMessage.current = { content: "", payload: "", id: "", shown: false };
-          setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || "助手没有返回文字" }]);
+          setMessages((current) => [...current, { role: "assistant", text: run.assistant_content || t("errNoReply") }]);
           return;
         }
         if (run.status === "failed" || run.status === "cancelled") {
           pendingMessage.current = { content: "", payload: "", id: "", shown: false };
-          throw new Error(`助手处理失败${run.error_code ? ` (${run.error_code})` : ""}`);
+          throw new Error(`${t("errRunFailed")}${run.error_code ? ` (${run.error_code})` : ""}`);
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
-      if (active.current && session === sessionId.current) throw new Error("等待回复超时，请稍后重试");
+      if (active.current && session === sessionId.current) throw new Error(t("errTimeout"));
     } catch (reason) {
       if (active.current && session === sessionId.current) {
         if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
@@ -245,41 +250,41 @@ export function VoiceAssistant({ expanded, initialText, onOpen, onClose, onSessi
   }
 
   return <div className={`voice-capture ${expanded ? "is-open" : ""}`}>
-    {expanded && <button className="voice-close" type="button" onClick={close} aria-label="收起语音助理"><Icon name="close" size={18} /></button>}
-    <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening ? "结束录音并转写" : "开始录音" : "打开语音助理并开始录音"}>
+    {expanded && <button className="voice-close" type="button" onClick={close} aria-label={t("collapseAria")}><Icon name="close" size={18} /></button>}
+    <button ref={orbButton} type="button" className="orb-button" onClick={expanded ? toggleRecord : openAndRecord} disabled={expanded && (busy || preparing)} aria-expanded={expanded} aria-label={expanded ? listening ? t("stopSendAria") : t("recordAgainAria") : t("micAsk")}>
       <span className={`voice-orb ${expanded ? "voice-orb-active" : ""} ${preparing || listening ? "voice-orb-listening" : ""}`}><Icon name="mic" size={31} /></span>
-      <strong id="capture-title">{expanded ? listening ? "正在录音 · 点按结束" : preparing ? "正在识别语音…" : "点按麦克风继续说" : "点按，问助理一件事"}</strong>
+      <strong id="capture-title">{expanded ? listening ? t("micListening") : preparing ? t("recognizingSpeech") : t("micTapMore") : t("micAsk")}</strong>
     </button>
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
-    {!preparing && lastAudio.current && input && <button className="voice-chat-note voice-enhance" type="button" onClick={() => void retryEnhancedTranscription()}>识别不准确？使用增强识别</button>}
+    {!preparing && lastAudio.current && input && <button className="voice-chat-note voice-enhance" type="button" onClick={() => void retryEnhancedTranscription()}>{t("enhancedRecognition")}</button>}
     {(messages.length > 0 || proposals.length > 0) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
       {messages.map((message, index) => <p key={index} className={`voice-chat-bubble ${message.role}`}>{message.text}</p>)}
       {proposals.map((proposal, index) => {
         const task = proposal.task || proposal.changes;
         const due = dueParts(task?.due);
         return <article className="voice-proposal" key={proposal.proposal_id}>
-          <strong>提案 {index + 1} · {proposal.operation === "create" ? "新建事务" : proposal.operation === "complete" ? "完成事务" : proposal.operation === "delete" ? "删除事务" : "修改事务"}</strong>
+          <strong>{t("proposalLabel")} {index + 1} · {proposal.operation === "create" ? t("opCreate") : proposal.operation === "complete" ? t("opComplete") : proposal.operation === "delete" ? t("opDelete") : t("opUpdate")}</strong>
           <p className="voice-proposal-title">{task?.title || proposal.task_id}</p>
           {task?.description && <p className="voice-proposal-description">{task.description}</p>}
           {task && <dl className="voice-proposal-details">
-            {(proposal.operation === "create" || task.due !== undefined) && <><dt>日期</dt><dd>{due.date}</dd><dt>时间</dt><dd>{due.time}</dd></>}
-            {(proposal.operation === "create" || task.category !== undefined) && <><dt>分类</dt><dd>{task.category || "未分类"}</dd></>}
-            {typeof task.importance === "number" && <><dt>重要度</dt><dd>{task.importance.toFixed(1)} / 10</dd></>}
-            {typeof task.urgency === "number" && <><dt>紧急度</dt><dd>{task.urgency.toFixed(1)} / 10</dd></>}
+            {(proposal.operation === "create" || task.due !== undefined) && <><dt>{t("dateLabel")}</dt><dd>{due.date}</dd><dt>{t("timeLabel")}</dt><dd>{due.time}</dd></>}
+            {(proposal.operation === "create" || task.category !== undefined) && <><dt>{t("categoryLabel")}</dt><dd>{task.category || t("uncategorized")}</dd></>}
+            {typeof task.importance === "number" && <><dt>{t("importanceLabel")}</dt><dd>{task.importance.toFixed(1)} / 10</dd></>}
+            {typeof task.urgency === "number" && <><dt>{t("urgencyLabel")}</dt><dd>{task.urgency.toFixed(1)} / 10</dd></>}
           </dl>}
-          {proposal.status === "pending" ? <div className="voice-proposal-actions"><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>取消</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>确认写入</button></div> : <small>{proposal.status === "confirmed" ? "已确认" : "已取消"}</small>}
+          {proposal.status === "pending" ? <div className="voice-proposal-actions"><button type="button" disabled={busy} onClick={() => void decide(proposal, false)}>{t("cancel")}</button><button type="button" disabled={busy} onClick={() => void decide(proposal, true)}>{t("confirmWrite")}</button></div> : <small>{proposal.status === "confirmed" ? t("confirmedLabel") : t("cancelledLabel")}</small>}
         </article>;
       })}
       <div ref={messageEnd} />
     </div>}
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-    <label className="field-label" htmlFor="voice-input">对话内容</label>
-    <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder="说出或输入你想问的事" />
+    <label className="field-label" htmlFor="voice-input">{t("chatLabel")}</label>
+    <textarea id="voice-input" rows={2} maxLength={8000} value={input} readOnly={listening} onChange={(event) => { inputRef.current = event.target.value; setInput(event.target.value); setClarification(""); }} placeholder={t("chatPlaceholder")} />
     {clarification && <p className="voice-chat-note" role="status">{clarification}</p>}
     {error && <p className="field-error" role="alert">{error}</p>}
-    <button className="button button-primary full-width" type="submit" disabled={busy || listening || preparing || !input.trim()}>{busy ? "正在处理…" : "发送给助理"}</button>
+    <button className="button button-primary full-width" type="submit" disabled={busy || listening || preparing || !input.trim()}>{busy ? t("processing") : t("sendAria")}</button>
     </form>
-    <p className="composer-footnote">事务变更仍需逐项确认。也可以问「我该先做哪件事？」</p>
+    <p className="composer-footnote">{guestQuota ? fill("guestVoiceNote", { n: guestQuota.left }) : t("confirmNote")}</p>
     </div></div>
   </div>;
 }
