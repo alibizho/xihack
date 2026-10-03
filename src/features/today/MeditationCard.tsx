@@ -4,17 +4,33 @@ import { t } from "../../shared/i18n.ts";
 import { playMeditationMusic } from "./meditationAudio";
 
 const durations = [5, 10, 15];
+const storageKey = "xihack-meditation-timer";
+
+function savedTimer() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(storageKey) || "{}");
+    const minutes = durations.includes(saved.minutes) ? saved.minutes : 5;
+    const endAt = typeof saved.endAt === "number" && saved.endAt > 0 ? saved.endAt : 0;
+    const remaining = endAt ? Math.max(0, Math.ceil((endAt - Date.now()) / 1000)) : Number.isInteger(saved.remaining) && saved.remaining >= 0 && saved.remaining <= minutes * 60 ? saved.remaining : minutes * 60;
+    return { minutes, remaining, endAt: remaining > 0 ? endAt : 0 };
+  } catch { return { minutes: 5, remaining: 300, endAt: 0 }; }
+}
 
 export function MeditationCard() {
-  const [minutes, setMinutes] = useState(5);
-  const [remaining, setRemaining] = useState(5 * 60);
-  const [running, setRunning] = useState(false);
+  const [initial] = useState(savedTimer);
+  const [minutes, setMinutes] = useState(initial.minutes);
+  const [remaining, setRemaining] = useState(initial.remaining);
+  const [running, setRunning] = useState(initial.endAt > 0);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicError, setMusicError] = useState(false);
-  const endAt = useRef(0);
+  const endAt = useRef(initial.endAt);
   const music = useRef<ReturnType<typeof playMeditationMusic> | null>(null);
 
   useEffect(() => () => { music.current?.stop(); }, []);
+  useEffect(() => {
+    try { sessionStorage.setItem(storageKey, JSON.stringify({ minutes, remaining, endAt: running ? endAt.current : 0 })); }
+    catch { /* Timer still works when storage is unavailable. */ }
+  }, [minutes, remaining, running]);
 
   function stopMusic() {
     music.current?.stop();
