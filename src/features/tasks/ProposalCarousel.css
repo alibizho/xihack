@@ -4,9 +4,9 @@
 .voice-proposal-kind { color: var(--blue-dark); font-size: 12px; font-weight: 700; }
 .voice-proposal-title { margin: 7px 0 9px; font-size: 18px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
 .voice-proposal-description { margin: 6px 0 10px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
-.voice-proposal-details { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 12px 0 16px; font-size: 13px; line-height: 1.5; }
+.voice-proposal-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 14px; min-width: 0; margin: 12px 0 16px; font-size: 13px; line-height: 1.5; }
 .voice-proposal-details dt { color: var(--blue-dark); }
-.voice-proposal-details dd { margin: 0; overflow-wrap: anywhere; }
+.voice-proposal-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .voice-proposal-actions { display: flex; gap: 9px; margin-top: 16px; }
 .voice-proposal-actions button { flex: 1; min-height: 46px; border: 1px solid var(--blue); color: var(--blue); background: transparent; cursor: pointer; }
 .voice-proposal-actions button:last-child { color: white; background: var(--blue); }
