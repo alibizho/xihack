@@ -35,7 +35,7 @@ export function TodayPage({ tasks, history, navigate, voiceOpen, voiceText, open
     <header className="today-intro"><span>{date}</span><h1>{greeting}，<br />{t("todayHeading")}</h1></header>
     <section className={`assistant-panel ${voiceOpen ? "voice-active" : ""}`} aria-labelledby="capture-title">
       <span className="demo-pill">{t("assistantPill")}</span>
-      <VoiceAssistant expanded={voiceOpen} initialText={voiceText} openTaskCount={open.length} guestQuota={guestQuota} onOpen={openVoice} onClose={closeVoice} onSessionExpired={onSessionExpired} onTasksChanged={onTasksChanged} onTaskCompleted={onTaskCompleted} />
+      <VoiceAssistant expanded={voiceOpen} initialText={voiceText} openTaskCount={open.length} guestQuota={guestQuota} onOpen={openVoice} onOpenText={openTextChat} onClose={closeVoice} onSessionExpired={onSessionExpired} onTasksChanged={onTasksChanged} onTaskCompleted={onTaskCompleted} />
       {!voiceOpen && <form className="quick-capture" onSubmit={(event) => { event.preventDefault(); if (thought.trim()) { openTextChat(thought.trim()); setThought(""); } }}>
         <label className="sr-only" htmlFor="quick-thought">{t("sendAria")}</label>
         <input id="quick-thought" maxLength={8000} value={thought} onChange={(event) => setThought(event.target.value)} placeholder={t("quickPlaceholder")} />

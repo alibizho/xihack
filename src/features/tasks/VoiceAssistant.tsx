@@ -21,7 +21,7 @@ function mergeProposals(current: Proposal[], incoming: Proposal[]) {
   return [...merged.values()];
 }
 
-export function VoiceAssistant({ expanded, initialText, openTaskCount, guestQuota, onOpen, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; openTaskCount: number; guestQuota?: GuestQuota; onOpen: () => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
+export function VoiceAssistant({ expanded, initialText, openTaskCount, guestQuota, onOpen, onOpenText, onClose, onSessionExpired, onTasksChanged, onTaskCompleted }: { expanded: boolean; initialText: string; openTaskCount: number; guestQuota?: GuestQuota; onOpen: () => void; onOpenText: (text: string) => void; onClose: () => void; onSessionExpired: () => void; onTasksChanged: () => void; onTaskCompleted: (taskId: string) => void }) {
   const orbButton = useRef<HTMLButtonElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const proposalBatchEnd = useRef<HTMLDivElement>(null);
@@ -40,6 +40,7 @@ export function VoiceAssistant({ expanded, initialText, openTaskCount, guestQuot
   const reconnectTimer = useRef<number | null>(null);
   const cancelRunWatch = useRef<(() => void) | null>(null);
   const activeRunId = useRef("");
+  const sendingSession = useRef<number | null>(null);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [structuredResult, setStructuredResult] = useState<AgentStructuredResult | null>(null);
@@ -381,12 +382,21 @@ export function VoiceAssistant({ expanded, initialText, openTaskCount, guestQuot
   }
 
   async function send(quickReply?: string) {
+    if (busy || preparing || activeRunId.current || sendingSession.current !== null) return;
     const session = sessionId.current;
     const content = (quickReply ?? inputRef.current).trim();
     const previousRecommendedTaskId = structuredResult?.recommended_task_id || "";
     if (!content) { setError(t("errEmptyInput")); return; }
     if (content.length > 8000) { setError(t("errTooLong")); return; }
     if (guestQuota && guestQuota.left <= 0) { setError(t("errGuestQuota")); return; }
+    sendingSession.current = session;
+    if (quickReply !== undefined) {
+      clearRecordingTimer();
+      const recording = capture.current;
+      capture.current = null;
+      if (recording) void recording.cancel();
+      setListening(false);
+    }
     setBusy(true);
     setError("");
     setStructuredResult(null);
@@ -436,7 +446,10 @@ export function VoiceAssistant({ expanded, initialText, openTaskCount, guestQuot
         if (reason instanceof ApiRequestError && (reason.code === "AUTH_REQUIRED" || reason.code === "CSRF_INVALID")) onSessionExpired();
         else if ((reason as Error).message !== "run_watch_cancelled") { inputRef.current = content; setInput(content); setError((reason as Error).message); }
       }
-    } finally { if (active.current && session === sessionId.current) setBusy(false); }
+    } finally {
+      if (sendingSession.current === session) sendingSession.current = null;
+      if (active.current && session === sessionId.current) setBusy(false);
+    }
   }
 
   async function decide(proposal: Proposal, accept: boolean) {
@@ -473,6 +486,9 @@ export function VoiceAssistant({ expanded, initialText, openTaskCount, guestQuot
       <span className={`voice-orb ${expanded ? "voice-orb-active" : ""} ${preparing || listening ? "voice-orb-listening" : ""}`}><Icon name="mic" size={31} /></span>
       <strong id="capture-title">{expanded ? listening ? t("micListening") : preparing ? t("recognizingSpeech") : t("micTapMore") : t("micAsk")}</strong>
     </button>
+    {!expanded && !hasPendingProposal && quickPrompts.length > 0 && <div className="assistant-quick-replies assistant-entry-prompts" aria-label={t("quickRepliesLabel")}>
+      {quickPrompts.map((prompt, index) => <button key={`${index}:${prompt}`} type="button" disabled={busy || preparing || !!activeRunId.current} onClick={() => onOpenText(prompt)}>{prompt}</button>)}
+    </div>}
     <div className="voice-capture-expanded" inert={!expanded} aria-hidden={!expanded}><div className="voice-capture-expanded-inner">
     {!preparing && lastAudio.current && input && <button className="voice-chat-note voice-enhance" type="button" onClick={() => void retryEnhancedTranscription()}>{t("enhancedRecognition")}</button>}
     {(messages.length > 0 || progress || liveAnswer) && <div className="voice-chat-messages" aria-live="polite" aria-relevant="additions text">
@@ -490,7 +506,7 @@ export function VoiceAssistant({ expanded, initialText, openTaskCount, guestQuot
     <ProposalCarousel proposals={proposals} busy={busy} focusProposalId={proposalFocusId} onDecide={(proposal, accept) => void decide(proposal, accept)} />
     {!hasPendingProposal && structuredResult?.result_type !== "proposal_bundle" && <TaskResultCarousel tasks={resultTasks} recommendedTaskId={structuredResult?.recommended_task_id || ""} />}
     {!busy && !hasPendingProposal && quickPrompts.length > 0 && <div className="assistant-quick-replies" aria-label={t("quickRepliesLabel")}>
-      {quickPrompts.map((prompt, index) => <button key={`${index}:${prompt}`} type="button" onClick={() => void send(prompt)}>{prompt}</button>)}
+      {quickPrompts.map((prompt, index) => <button key={`${index}:${prompt}`} type="button" disabled={preparing} onClick={() => void send(prompt)}>{prompt}</button>)}
     </div>}
     <form className="voice-capture-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
     <label className="field-label" htmlFor="voice-input">{t("chatLabel")}</label>

@@ -21,9 +21,11 @@
 .voice-chat-bubble.assistant a { color: #176375; text-decoration: underline; text-underline-offset: 2px; }
 .voice-run-progress { align-self: flex-start; margin: 0; padding: 3px 4px; color: #617680; font-size: 12px; line-height: 1.45; }
 .assistant-quick-replies { display: flex; flex-wrap: wrap; gap: 8px; width: min(100%, 620px); margin: 10px auto 4px; }
-.assistant-quick-replies button { min-height: 44px; padding: 8px 13px; border: 1px solid #cbdad7; border-radius: 20px; background: #f6f8f4; color: var(--blue-dark); font: inherit; font-size: 13px; line-height: 1.35; text-align: left; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
-.assistant-quick-replies button:hover { border-color: #9eb9b3; background: #eaf1ec; }
-.assistant-quick-replies button:active { background: #dce9e6; }
+.assistant-entry-prompts { justify-content: center; margin-top: 16px; }
+.assistant-quick-replies button { max-width: 100%; overflow-wrap: anywhere; min-height: 44px; padding: 8px 13px; border: 1px solid #cbdad7; border-radius: 20px; background: #f6f8f4; color: var(--blue-dark); font: inherit; font-size: 13px; line-height: 1.35; text-align: left; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.assistant-quick-replies button:disabled { opacity: .55; cursor: default; }
+.assistant-quick-replies button:hover:not(:disabled) { border-color: #9eb9b3; background: #eaf1ec; }
+.assistant-quick-replies button:active:not(:disabled) { background: #dce9e6; }
 .assistant-quick-replies button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .voice-proposal-batch { width: 100%; min-width: 0; display: grid; gap: 8px; padding: 10px; border: 1px solid #9eb9b3; border-radius: 10px; background: #eaf1ec; }
 .voice-proposal-batch-area { display: grid; gap: 10px; width: 100%; min-width: 0; justify-self: stretch; }
