@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "../../shared/api.ts";
 import { Icon } from "../../shared/Icon";
 import { csrf, getTaskReport, submitTaskReport, type TaskReport } from "./agentApi";
+import { t } from "../../shared/i18n.ts";
 import "./TaskComposer.css";
 
 export function TaskReportDialog({ taskId, title, onClose }: { taskId: string; title: string; onClose: () => void }) {
@@ -26,14 +27,14 @@ export function TaskReportDialog({ taskId, title, onClose }: { taskId: string; t
   }
 
   return <dialog ref={dialog} className="composer report-dialog" onClose={onClose} aria-labelledby="report-title">
-    <div className="composer-head"><div><span className="section-kicker">完成后复盘</span><h2 id="report-title">{title}</h2></div><button className="icon-button" type="button" onClick={() => dialog.current?.close()} aria-label="关闭"><Icon name="close" /></button></div>
-    <p className="review-intro">说说这件事做得怎样、哪里卡住了。助理会保存要点，供以后安排事务时参考。</p>
+    <div className="composer-head"><div><span className="section-kicker">{t("reportKicker")}</span><h2 id="report-title">{title}</h2></div><button className="icon-button" type="button" onClick={() => dialog.current?.close()} aria-label={t("closeAria")}><Icon name="close" /></button></div>
+    <p className="review-intro">{t("reportIntro")}</p>
     {report ? <>
       <p className="report-body">{report.body}</p>
-      {report.status === "analyzed" ? <dl className="report-insight"><dt>完成情况</dt><dd>{report.summary}</dd>{report.blocker && <><dt>遇到的阻碍</dt><dd>{report.blocker}</dd></>}{report.next_step && <><dt>下次可试</dt><dd>{report.next_step}</dd></>}</dl>
-        : <p role="status">报告已保存，分析{report.status === "unavailable" ? "暂时不可用" : "尚未完成"}。</p>}
-      {report.status === "pending" && <button className="button button-outline" disabled={busy} onClick={() => void submit()}>{busy ? "正在分析…" : "重试分析"}</button>}
-    </> : <form onSubmit={(event) => { event.preventDefault(); void submit(); }}><label className="field-label" htmlFor="report-body">你的完成报告</label><textarea id="report-body" value={body} onChange={(event) => setBody(event.target.value)} minLength={1} maxLength={2000} required placeholder="例如：完成了初稿，但估时偏短；查资料花了更多时间。" /><button className="button button-primary full-width" disabled={busy || !body.trim()}>{busy ? "正在保存与分析…" : "保存并分析"}</button></form>}
+      {report.status === "analyzed" ? <dl className="report-insight"><dt>{t("summaryLabel")}</dt><dd>{report.summary}</dd>{report.blocker && <><dt>{t("blockerLabel")}</dt><dd>{report.blocker}</dd></>}{report.next_step && <><dt>{t("nextStepLabel")}</dt><dd>{report.next_step}</dd></>}</dl>
+        : <p role="status">{report.status === "unavailable" ? t("reportSavedUnavailable") : t("reportSavedPending")}</p>}
+      {report.status === "pending" && <button className="button button-outline" disabled={busy} onClick={() => void submit()}>{busy ? t("analyzing") : t("retryAnalysis")}</button>}
+    </> : <form onSubmit={(event) => { event.preventDefault(); void submit(); }}><label className="field-label" htmlFor="report-body">{t("yourReport")}</label><textarea id="report-body" value={body} onChange={(event) => setBody(event.target.value)} minLength={1} maxLength={2000} required placeholder={t("reportPlaceholder")} /><button className="button button-primary full-width" disabled={busy || !body.trim()}>{busy ? t("savingAnalyzing") : t("saveAndAnalyze")}</button></form>}
     {error && <p className="field-error" role="alert">{error}</p>}
   </dialog>;
 }

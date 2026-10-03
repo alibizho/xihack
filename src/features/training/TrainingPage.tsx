@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { priorityScore, type Task } from "../tasks/mockTasks";
 import { cellFeedback, shuffledBoard, type Difficulty } from "./trainingGame";
 import { Icon } from "../../shared/Icon";
+import { fill, t } from "../../shared/i18n.ts";
 import "./TrainingPage.css";
 
 type Round = { id: string; difficulty: Difficulty; seconds: number; mistakes: number; taps: number[]; completedAt: string };
-const modes: { id: Difficulty; name: string; detail: string }[] = [
-  { id: "beginner", name: "入门", detail: "提示下一个数字，点过的格子变色" },
-  { id: "normal", name: "普通", detail: "没有数字提示，点过的格子变色" },
-  { id: "advanced", name: "进阶", detail: "没有提示，点过的格子保持原样" },
+const modes: { id: Difficulty; name: () => string; detail: () => string }[] = [
+  { id: "beginner", name: () => t("modeBeginner"), detail: () => t("modeBeginnerDetail") },
+  { id: "normal", name: () => t("modeNormal"), detail: () => t("modeNormalDetail") },
+  { id: "advanced", name: () => t("modeAdvanced"), detail: () => t("modeAdvancedDetail") },
 ];
-const formatTime = (seconds: number) => seconds.toFixed(1) + " 秒";
+const formatTime = (seconds: number) => seconds.toFixed(1) + t("secondShort");
 
 export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () => void }) {
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
@@ -82,19 +83,19 @@ export function TrainingPage({ tasks, navigate }: { tasks: Task[]; navigate: () 
   const slowest = intervals.length ? intervals.indexOf(Math.max(...intervals)) + 1 : 0;
 
   return <div className="training-page">
-    <header className="training-intro"><span className="section-kicker">专注训练 / 5 × 5</span><h1>从 1 数到 25</h1><p>选一个难度，按顺序点击数字。</p></header>
-    <div className="difficulty-picker" role="group" aria-label="训练难度">{modes.map((mode) => <button key={mode.id} className={difficulty === mode.id ? "selected" : ""} aria-pressed={difficulty === mode.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setDifficulty(mode.id)}><strong>{mode.name}</strong><span>{mode.detail}</span></button>)}</div>
-    <section className="training-surface" aria-label="5×5 数字训练">
-      <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? `下一个：${target}` : phase === "playing" ? `已完成 ${target - 1} / 25` : modes.find((mode) => mode.id === difficulty)?.name}</span><strong>{formatTime(elapsed)}</strong></div>
+    <header className="training-intro"><span className="section-kicker">{t("trainingKicker")}</span><h1>{t("countFrom1to25")}</h1><p>{t("pickDifficulty")}</p></header>
+    <div className="difficulty-picker" role="group" aria-label={t("difficultyAria")}>{modes.map((mode) => <button key={mode.id} className={difficulty === mode.id ? "selected" : ""} aria-pressed={difficulty === mode.id} disabled={phase === "playing" || phase === "countdown"} onClick={() => setDifficulty(mode.id)}><strong>{mode.name()}</strong><span>{mode.detail()}</span></button>)}</div>
+    <section className="training-surface" aria-label={t("boardAria")}>
+      <div className="training-bar"><span>{phase === "playing" && difficulty === "beginner" ? fill("nextNumber", { n: target }) : phase === "playing" ? fill("doneCount", { n: target - 1 }) : modes.find((mode) => mode.id === difficulty)?.name()}</span><strong>{formatTime(elapsed)}</strong></div>
       {phase !== "idle" && <div className="board-wrap" ref={boardWrap}>
-        <div className={`training-board ${phase === "countdown" ? "is-hidden" : ""}`}>{board.map((number) => <button key={number} className={`training-cell ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} onClick={() => tap(number)} disabled={phase !== "playing"} aria-label={`数字 ${number}`}>{number}</button>)}</div>
+        <div className={`training-board ${phase === "countdown" ? "is-hidden" : ""}`}>{board.map((number) => <button key={number} className={`training-cell ${phase === "playing" ? cellFeedback(difficulty, number, target) : ""}`} onClick={() => tap(number)} disabled={phase !== "playing"} aria-label={fill("numberAria", { n: number })}>{number}</button>)}</div>
         {phase === "countdown" && <div className="board-overlay" aria-live="polite">{countdown}</div>}
       </div>}
-      {phase === "playing" && <p className="training-progress">误触 {mistakes} 次 · 只有点对当前数字才会前进</p>}
-      {(phase === "idle" || phase === "interrupted" || phase === "finished") && <button className="button button-primary training-start" onClick={start}><Icon name="play" size={18} /> {phase === "idle" ? "开始训练" : "再来一局"}</button>}
-      {phase === "interrupted" && <p className="training-message">页面切到后台，本局已中断，不计入成绩。</p>}
+      {phase === "playing" && <p className="training-progress">{fill("mistakesNote", { n: mistakes })}</p>}
+      {(phase === "idle" || phase === "interrupted" || phase === "finished") && <button className="button button-primary training-start" onClick={start}><Icon name="play" size={18} /> {phase === "idle" ? t("startTraining") : t("playAgain")}</button>}
+      {phase === "interrupted" && <p className="training-message">{t("interruptedNote")}</p>}
     </section>
-    {phase === "finished" && last && <section className="training-result" aria-live="polite"><span className="section-kicker">本局结果 · {modes.find((mode) => mode.id === last.difficulty)?.name}</span><h2>{formatTime(last.seconds)}</h2><p>误触 {last.mistakes} 次 · 最慢的一步：{slowest === 1 ? "寻找 1" : `${slowest - 1} → ${slowest}`}</p>{nextTask && <button onClick={navigate}>接下来：{nextTask.title} <Icon name="arrow" size={17} /></button>}</section>}
-    {rounds.length > 0 && <details className="round-history"><summary>训练记录 <span>{rounds.length} 局</span></summary><ol>{rounds.map((round) => <li key={round.id}><span>{modes.find((mode) => mode.id === round.difficulty)?.name}</span><strong>{formatTime(round.seconds)}</strong><small>误触 {round.mistakes} 次</small></li>)}</ol></details>}
+    {phase === "finished" && last && <section className="training-result" aria-live="polite"><span className="section-kicker">{t("roundResult")} · {modes.find((mode) => mode.id === last.difficulty)?.name()}</span><h2>{formatTime(last.seconds)}</h2><p>{fill("mistakesSlowest", { n: last.mistakes, step: slowest === 1 ? t("findingFirst") : fill("nextStepAria", { a: slowest - 1, b: slowest }) })}</p>{nextTask && <button onClick={navigate}>{t("nextUpLabel")}{nextTask.title} <Icon name="arrow" size={17} /></button>}</section>}
+    {rounds.length > 0 && <details className="round-history"><summary>{t("trainingHistory")} <span>{fill("roundsCount", { n: rounds.length })}</span></summary><ol>{rounds.map((round) => <li key={round.id}><span>{modes.find((mode) => mode.id === round.difficulty)?.name()}</span><strong>{formatTime(round.seconds)}</strong><small>{fill("mistakesCount", { n: round.mistakes })}</small></li>)}</ol></details>}
   </div>;
 }

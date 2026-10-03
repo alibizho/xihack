@@ -1,4 +1,5 @@
 import { formatDue, priorityScore, type Task } from "./mockTasks";
+import { fill } from "../../shared/i18n.ts";
 import { Icon } from "../../shared/Icon";
 
 export function TaskRow({
@@ -20,7 +21,7 @@ export function TaskRow({
         className="task-check"
         onClick={() => toggle(task.id)}
         disabled={serverMode && task.done}
-        aria-label={`${task.done ? serverMode ? "已完成" : "恢复待办" : "标记完成"}：${task.title}`}
+        aria-label={task.done ? (serverMode ? fill("doneAria", { title: task.title }) : fill("restoreAria", { title: task.title })) : fill("markDoneAria", { title: task.title })}
         aria-pressed={task.done}
       >
         {task.done && <Icon name="check" size={15} />}
@@ -33,8 +34,8 @@ export function TaskRow({
         </div>
       </div>
       <span className="task-priority">{priorityScore(task).toFixed(1)}</span>
-      {openReport && <button className="task-edit" onClick={openReport} aria-label={`查看${task.title}的完成报告`}><Icon name="arrow" size={18} /></button>}
-      {edit && <button className="task-edit" onClick={edit} aria-label={`编辑${task.title}`}><Icon name="arrow" size={18} /></button>}
+      {openReport && <button className="task-edit" onClick={openReport} aria-label={fill("viewReportAria", { title: task.title })}><Icon name="arrow" size={18} /></button>}
+      {edit && <button className="task-edit" onClick={edit} aria-label={fill("editAria", { title: task.title })}><Icon name="arrow" size={18} /></button>}
     </div>
   );
 }
