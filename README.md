@@ -1,12 +1,16 @@
+<div align="center">
+  <img src="frontend/public/logo.jpg" alt="易忆彩色圆环标志" width="160" />
+  <h1>易忆 · Indigo</h1>
+  <p><strong>帮助用户从混乱进入行动，再从行动回到平静。</strong></p>
+  <p>
+    <a href="https://jianwenjiuzhou.cloud/">在线体验</a> ·
+    <a href="https://b23.tv/MC6SeNl">演示视频</a> ·
+    <a href="产品说明文档.md">产品说明</a> ·
+    <a href="易忆路演PPT.pptx">路演 PPT</a>
+  </p>
+</div>
 
-
-# 易忆 - Indigo
-
-**帮助用户从混乱进入行动，再从行动回到平静。** 易忆是一个移动端优先的任务与专注支持 Web 原型：用户整理事务，与 AI 助理讨论下一步，完成行动后记录复盘，也可以通过找数训练观察单局表现。
-
-**在线演示：** [jianwenjiuzhou.cloud](https://jianwenjiuzhou.cloud/)
-
-**演示视频：** [观看易忆演示](https://b23.tv/MC6SeNl)
+易忆是一个移动端优先的任务与专注支持 Web 原型：用户整理事务，与 AI 助理讨论下一步，完成行动后记录复盘，也可以通过找数训练观察单局表现。
 
 目前实现面向个人使用。
 
