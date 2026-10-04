@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/public/logo.jpg" alt="易忆彩色圆环标志" width="160" />
+  <img src="frontend/public/logo.png" alt="易忆彩色圆环标志" width="160" />
   <h1>易忆 · Indigo</h1>
   <p><strong>帮助用户从混乱进入行动，再从行动回到平静。</strong></p>
   <p>
