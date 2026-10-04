@@ -10,20 +10,27 @@
   </p>
 </div>
 
-易忆是一个移动端优先的任务与专注支持 Web 原型：用户整理事务，与 AI 助理讨论下一步，完成行动后记录复盘，也可以通过找数训练观察单局表现。
+## 一、项目简介
+易忆是一个教育辅助类的 Web 原型，专注于服务用户大脑，为用户整理分类事务，训练注意力以及冥想放松。
 
 目前实现面向个人使用。
 
-## 技术栈
+## 二、技术栈
 
 - 前端：React 19、TypeScript、Vite；支持简体中文和英文。
 - 应用服务：Node.js 22，提供静态文件、训练复盘接口和后端 API 代理。
 - 后端：FastAPI、PostgreSQL、SQLAlchemy、Alembic；按账号保存任务、会话、对话和 Agent 运行记录。
 - AI：小米 MiMo 对话 API；浏览器内通过 Transformers.js 加载 Whisper Tiny 做语音转写。
 
-## 快速开始
+## 三、快速开始
 
-需要 Node.js 22+、npm 和 Docker Compose。以下命令从仓库根目录执行。
+### 环境要求
+
+需要 Node.js 22+、npm 和 Docker Compose。
+
+### 安装步骤
+
+以下命令从仓库根目录执行。
 
 1. 启动 PostgreSQL 和后端 API：
 
@@ -59,7 +66,11 @@ LOCAL_APP_ORIGIN=http://localhost:5173 docker compose --profile agent up --build
 
 `backend/compose.yml` 用于本机演示。`deploy/` 另有前端与后端的 Compose、Dockerfile 和 Nginx 配置；在线演示地址见上方。部署时仍需配置服务器环境变量、HTTPS 证书、持久化数据库和迁移流程。
 
-## 核心功能
+### 运行方式
+
+打开https://jianwenjiuzhou.cloud/，根据提示注册和登录使用
+
+## 四、核心功能
 
 | 功能 | 主要代码 |
 | --- | --- |
@@ -72,7 +83,7 @@ LOCAL_APP_ORIGIN=http://localhost:5173 docker compose --profile agent up --build
 
 任务和对话存在 PostgreSQL；训练单局记录主要保存在当前浏览器，派生摘要会尝试同步到后端。没有模型密钥时，不会伪造 AI 回复：相应请求会返回错误。当前仓库尚无经过验证的线上部署或企业收益数据。
 
-## 大模型与 API 使用说明
+## 五、大模型使用说明
 
 | 模型或服务 | 调用位置与方式 | 用途 |
 | --- | --- | --- |
@@ -82,7 +93,7 @@ LOCAL_APP_ORIGIN=http://localhost:5173 docker compose --profile agent up --build
 
 当前 Agent 实际选用 MiMo。配置中虽然保留 OpenAI Next / DeepSeek 参数，`backend/src/assistant_backend/config.py` 的 `chat_provider` 当前没有选用它。赛事如要求赞助商 API 使用清单，提交前应核对赞助商名称与实际调用记录，不把未调用的服务列为已使用。
 
-## 项目结构
+## 六、项目结构
 
 ```text
 ├── frontend/            # React 界面、Node 服务及前端构建配置
@@ -92,7 +103,7 @@ LOCAL_APP_ORIGIN=http://localhost:5173 docker compose --profile agent up --build
 └── README.md
 ```
 
-## 测试说明
+## 七、测试说明
 
 ```bash
 cd frontend
@@ -102,7 +113,7 @@ npm test
 
 前端测试覆盖任务模型、Agent API 数据处理、训练规则、认证与国际化等。后端测试需要名称以 `_test` 结尾的独立可丢弃 PostgreSQL 数据库。设置 `TEST_DATABASE_URL` 后，在 `backend/` 目录运行 `uv run pytest -p no:cacheprovider -q`。还可运行 `uv run ruff check .` 和 `uv run ruff format --check .`。自动测试不能替代真实模型凭证和路演环境的端到端验证。
 
-## 团队成员
+## 八、团队成员
 
 - 谷松旭
 - Zhomart Alibi
