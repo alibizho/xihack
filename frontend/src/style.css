@@ -3,7 +3,8 @@
 :root {
   font-family: "DM Sans", "Noto Sans SC", sans-serif;
   color: #304858;
-  background: #6c91a3;
+  background-color: #d2e2e4;
+  overscroll-behavior-y: none;
   font-synthesis: none;
   font-size: 16px;
   --ink: #304858;
@@ -14,7 +15,7 @@
   --line: #ccdadd;
 }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
+body { margin: 0; min-width: 320px; background-color: #d2e2e4; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
