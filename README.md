@@ -6,6 +6,8 @@
 
 **在线演示：** [jianwenjiuzhou.cloud](https://jianwenjiuzhou.cloud/)
 
+**演示视频：** [观看易忆演示](https://b23.tv/MC6SeNl)
+
 目前实现面向个人使用。
 
 ## 技术栈
